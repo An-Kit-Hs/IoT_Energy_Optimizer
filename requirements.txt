@@ -1,0 +1,11 @@
+ultralytics>=8.0.200
+tensorflow>=2.13
+onnx>=1.14
+onnxruntime>=1.16
+numpy
+opencv-python
+tf_keras<=2.19.0
+sng4onnx>=1.0.1
+onnx_graphsurgeon>=0.3.26
+onnx2tf>=1.26.3,<1.29.0
+onnxslim>=0.1.71
