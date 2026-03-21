@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import tensorflow as tf
+from preprocess import preprocess_frame
 
 tflite = tf.lite
 
@@ -24,11 +25,7 @@ class HumanDetector:
 
     def detect(self, frame):
         h, w = frame.shape[:2]
-
-        img = cv2.resize(frame, (self.input_size, self.input_size))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        input_data = np.expand_dims(img, axis=0).astype(np.float32) / 255.0
+        input_data = preprocess_frame(frame)
 
         self.interpreter.set_tensor(
             self.input_details[0]['index'], input_data
@@ -39,7 +36,7 @@ class HumanDetector:
             self.output_details[0]['index']
         )[0]                      # (84, 2100)
 
-        output = np.transpose(output, (1, 0))  # -> (2100, 84)
+        output = np.transpose(output, (1, 0))  # (2100, 84)
 
         boxes = []
         scores = []
