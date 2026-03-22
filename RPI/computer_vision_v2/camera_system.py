@@ -14,7 +14,8 @@ class OccupancySystem:
 
     def process(self, frame):
         detections = self.detector.detect(frame)
-        tracks = self.tracker.update(detections)
+        det_boxes = [d["bbox"] for d in detections]
+        tracks = self.tracker.update(det_boxes)
 
         points = []
 

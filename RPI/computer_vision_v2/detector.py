@@ -71,19 +71,21 @@ class HumanDetector:
             scores.append(float(conf))
 
         # -------- NMS --------
-        indices = cv2.dnn.NMSBoxes(
-            boxes,
-            scores,
-            self.conf_threshold,
-            self.nms_threshold
-        )
-
         detections = []
-        if len(indices) > 0:
-            for i in np.array(indices).flatten():
-                detections.append({
-                    "bbox": boxes[i],
-                    "confidence": scores[i]
-                })
+
+        if len(boxes) > 0:
+            indices = cv2.dnn.NMSBoxes(
+                boxes,
+                scores,
+                self.conf_threshold,
+                self.nms_threshold
+            )
+
+            if len(indices) > 0:
+                for i in np.array(indices).flatten():
+                    detections.append({
+                        "bbox": boxes[i],
+                        "confidence": scores[i]
+                    })
 
         return detections
