@@ -3,6 +3,16 @@ from utils import Camera
 from computer_vision_v2 import OccupancySystem
 from mqtt.mqtt_client import MQTTClient
 import config
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+model_path = os.path.join(
+    BASE_DIR,
+    "models",
+    "yolov8n_saved_model",
+    "yolov8n_int8.tflite"
+)
 
 # ------------------ CONFIG ------------------
 
@@ -14,7 +24,7 @@ SLEEP_TIME = 0.02
 mqtt = MQTTClient(config.MQTT_BROKER)
 mqtt.connect()
 
-vision = OccupancySystem("RPI/models/yolov8n_saved_model/yolov8n_int8.tflite")
+vision = OccupancySystem(model_path)
 
 camera = Camera(320, 240)
 
@@ -54,4 +64,5 @@ except KeyboardInterrupt:
 
 finally:
     camera.release()
+    mqtt.publish(config.OCC_TOPIC, {"count": 0})
     mqtt.disconnect()
