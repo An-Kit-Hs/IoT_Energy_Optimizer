@@ -1,18 +1,13 @@
 import time
-import cv2
-from picamera2 import Picamera2 #type: ignore
-
+from utils import Camera
 from computer_vision_v2 import OccupancySystem
 from mqtt.mqtt_client import MQTTClient
 import config
 
-
 # ------------------ CONFIG ------------------
 
-FRAME_SKIP = 4          # run detection every N frames
-SLEEP_TIME = 0.02       # loop delay
-USE_LORES = True        # use low-res stream
-
+FRAME_SKIP = 4
+SLEEP_TIME = 0.02
 
 # ------------------ INIT ------------------
 
@@ -21,22 +16,7 @@ mqtt.connect()
 
 vision = OccupancySystem("models/yolov8n_saved_model/yolov8n_int8.tflite")
 
-picam2 = Picamera2()
-
-if USE_LORES:
-    cam_config = picam2.create_preview_configuration(
-        main={"size": (320, 240)},
-        lores={"size": (160, 120), "format": "RGB888"}
-    )
-    stream_name = "lores"
-else:
-    cam_config = picam2.create_preview_configuration(
-        main={"size": (320, 240), "format": "RGB888"}
-    )
-    stream_name = "main"
-
-picam2.configure(cam_config)
-picam2.start()
+camera = Camera(320, 240)
 
 frame_id = 0
 people = 0
@@ -48,12 +28,11 @@ try:
     while True:
 
         # -------- Capture --------
-        frame = picam2.capture_array(stream_name)
+        ret, frame = camera.read()
+        if not ret:
+            continue
 
-        # Convert RGB → BGR (OpenCV requirement)
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        # -------- Detection (skipped frames) --------
+        # -------- Detection --------
         if frame_id % FRAME_SKIP == 0:
             result = vision.process(frame)
             people = result["count"]
@@ -63,12 +42,16 @@ try:
                 {"count": people}
             )
 
+            print(f"[VISION] People: {people}")
+
         frame_id += 1
 
-        # -------- Sleep (CPU control) --------
+        # -------- Sleep --------
         time.sleep(SLEEP_TIME)
 
 except KeyboardInterrupt:
     print("Stopping vision service...")
-    picam2.stop()
+
+finally:
+    camera.release()
     mqtt.disconnect()

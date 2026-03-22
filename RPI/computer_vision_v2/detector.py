@@ -1,63 +1,89 @@
-import cv2
 import numpy as np
-import tensorflow as tf
+import cv2
+from utils import get_interpreter
+from preprocess import preprocess_frame
 
 PERSON_CLASS_ID = 0
 
+
 class HumanDetector:
-    def __init__(self, model_path, conf_th=0.3, nms_th=0.4):
-        self.interpreter = tf.lite.Interpreter(model_path=model_path)
+
+    def __init__(self, model_path, conf_threshold=0.25, nms_threshold=0.45):
+
+        # -------- Load model --------
+        self.interpreter = get_interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
 
-        self.inp = self.interpreter.get_input_details()[0]
-        self.out = self.interpreter.get_output_details()[0]
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
 
-        self.conf_th = conf_th
-        self.nms_th = nms_th
-        self.is_uint8 = self.inp['dtype'] == np.uint8
+        self.input_size = self.input_details[0]['shape'][1]
 
-    def preprocess(self, frame):
-        img = cv2.resize(frame, (320, 320))
-
-        if self.is_uint8:
-            return img[None].astype(np.uint8)
-
-        img = img[..., ::-1].astype(np.float32) / 255.0
-        return img[None]
+        self.conf_threshold = conf_threshold
+        self.nms_threshold = nms_threshold
 
     def detect(self, frame):
         h, w = frame.shape[:2]
 
-        inp = self.preprocess(frame)
-        self.interpreter.set_tensor(self.inp['index'], inp)
+        input_data = preprocess_frame(frame)
+
+        # -------- Inference --------
+        self.interpreter.set_tensor(
+            self.input_details[0]['index'], input_data
+        )
         self.interpreter.invoke()
 
-        output = self.interpreter.get_tensor(self.out['index'])[0].T
+        output = self.interpreter.get_tensor(
+            self.output_details[0]['index']
+        )[0]
 
-        class_scores = output[:, 4:]
-        class_ids = np.argmax(class_scores, axis=1)
-        scores = np.max(class_scores, axis=1)
+        output = np.transpose(output, (1, 0))
 
-        mask = (scores > self.conf_th) & (class_ids == PERSON_CLASS_ID)
-        output = output[mask]
-        scores = scores[mask]
+        boxes = []
+        scores = []
 
-        if len(output) == 0:
-            return []
+        for det in output:
+            cx, cy, bw, bh = det[:4]
+            class_scores = det[4:]
 
-        cx, cy, bw, bh = output[:, 0], output[:, 1], output[:, 2], output[:, 3]
+            class_id = np.argmax(class_scores)
+            conf = class_scores[class_id]
 
-        x = (cx - bw / 2) * w
-        y = (cy - bh / 2) * h
-        bw *= w
-        bh *= h
+            if conf < self.conf_threshold:
+                continue
 
-        boxes = np.stack([x, y, bw, bh], axis=1).astype(int).tolist()
-        scores = scores.tolist()
+            if class_id != PERSON_CLASS_ID:
+                continue
 
-        indices = cv2.dnn.NMSBoxes(boxes, scores, self.conf_th, self.nms_th)
+            # -------- Scale --------
+            x = int((cx - bw / 2) * w)
+            y = int((cy - bh / 2) * h)
+            bw = int(bw * w)
+            bh = int(bh * h)
 
-        if len(indices) == 0:
-            return []
+            # Clamp
+            x = max(0, x)
+            y = max(0, y)
+            bw = min(w - x, bw)
+            bh = min(h - y, bh)
 
-        return [boxes[i] for i in np.array(indices).flatten()]
+            boxes.append([x, y, bw, bh])
+            scores.append(float(conf))
+
+        # -------- NMS --------
+        indices = cv2.dnn.NMSBoxes(
+            boxes,
+            scores,
+            self.conf_threshold,
+            self.nms_threshold
+        )
+
+        detections = []
+        if len(indices) > 0:
+            for i in np.array(indices).flatten():
+                detections.append({
+                    "bbox": boxes[i],
+                    "confidence": scores[i]
+                })
+
+        return detections
