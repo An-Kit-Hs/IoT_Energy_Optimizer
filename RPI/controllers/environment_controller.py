@@ -5,11 +5,9 @@ from air_quality.ventilation_predictor import VentilationPredictor
 from utils.comfort_calculator import ComfortCalculator
 import config
 
-
 class EnvironmentController:
 
     def __init__(self, ac, exhaust, occupancy):
-
         self.ac = ac
         self.exhaust = exhaust
         self.occupancy = occupancy
@@ -22,59 +20,41 @@ class EnvironmentController:
         self.comfort = ComfortCalculator()
 
     def process(self, data, people):
-
-        
         # Update occupancy model
-        
         occ = self.occupancy.update(people)
 
-        
-        # Smooth sensor noise
-        
+        # Smooth sensor noise        
         data = self.smoother.smooth(data)
 
-        
-        # Compute AQI score
-        
+        # Compute AQI score        
         score = self.aqi.overall(data)
 
-        
-        # Detect pollution trend
-        
+        # Detect pollution trend        
         trend_rising = self.trend.update(score)
 
-        
-        # Emergency air quality override
-        
+        # Emergency air quality override        
         if score > 75:
-
             print("Dangerous air quality detected")
 
             self.ac.turn_off()
             self.exhaust.turn_on()
 
             return
-
         
         # Predictive ventilation
-        
         if self.ventilation.should_ventilate(score, trend_rising):
-
             self.exhaust.turn_on()
 
         else:
-
             self.exhaust.turn_off()
 
         # If exhaust is running, avoid AC cooling
         if self.exhaust.state == "ON":
-
             self.ac.turn_off()
             return
 
         
         # Comfort temperature calculation
-        
         feels_like = self.comfort.feels_like(
             data.temperature,
             data.humidity
@@ -82,31 +62,20 @@ class EnvironmentController:
 
         
         # Occupied mode
-        
         if occ["occupied"]:
-
             if feels_like > config.COMFORT_TEMP + config.TEMP_BAND:
-
                 self.ac.turn_on(config.COMFORT_TEMP)
 
             elif feels_like < config.COMFORT_TEMP - config.TEMP_BAND:
-
                 self.ac.turn_off()
 
-        
-        # Predictive precooling
-        
+        # Predictive precooling        
         elif occ["precool"]:
-
             print("Precooling room")
-
             self.ac.turn_on(config.ECO_TEMP)
 
-        
-        # Empty room energy saving
-        
+        # Empty room energy saving        
         else:
-
             self.ac.turn_off()
 
         print(

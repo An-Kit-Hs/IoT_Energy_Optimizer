@@ -1,7 +1,6 @@
 class ComfortCalculator:
 
     def feels_like(self, temp_c, humidity):
-
         temp_f = temp_c * 9/5 + 32
 
         hi = (

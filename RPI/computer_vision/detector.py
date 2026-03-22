@@ -4,9 +4,7 @@ import tensorflow as tf
 from preprocess import preprocess_frame
 
 tflite = tf.lite
-
 PERSON_CLASS_ID = 0
-
 
 class HumanDetector:
     def __init__(self, model_path, conf_threshold=0.25, nms_threshold=0.45):

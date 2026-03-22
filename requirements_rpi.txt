@@ -1,0 +1,8 @@
+ultralytics>=8.0.200
+tflite-runtime
+onnx>=1.14
+onnxruntime>=1.16
+numpy
+opencv-python-headless
+sng4onnx>=1.0.1
+onnxslim>=0.1.71

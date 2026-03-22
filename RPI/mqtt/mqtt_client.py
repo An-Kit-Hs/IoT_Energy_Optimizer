@@ -1,7 +1,6 @@
 import json
-import paho.mqtt.client as mqtt
+import paho.mqtt.client as mqtt # type: ignore
 from typing import Callable, Optional
-
 
 class MQTTClient:
     def __init__(
