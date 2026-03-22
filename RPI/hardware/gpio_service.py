@@ -1,5 +1,5 @@
 import time
-from mqtt.mqtt_client import MQTTClient
+from mqtt import MQTTClient
 from hardware.gpio_controller import GPIOController
 import config
 

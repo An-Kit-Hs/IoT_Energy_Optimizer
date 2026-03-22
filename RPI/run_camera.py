@@ -1,7 +1,7 @@
 import time
 from utils import Camera
 from computer_vision_v2 import OccupancySystem
-from mqtt.mqtt_client import MQTTClient
+from mqtt import MQTTClient
 import config
 import os
 

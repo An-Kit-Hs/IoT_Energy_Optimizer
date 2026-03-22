@@ -4,7 +4,6 @@ import threading
 import paho.mqtt.client as mqtt
 from typing import Callable, Optional, Dict
 
-
 class MQTTClient:
     def __init__(
         self,

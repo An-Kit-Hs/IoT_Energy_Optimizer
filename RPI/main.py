@@ -1,4 +1,4 @@
-from mqtt.mqtt_client import MQTTClient
+from mqtt import MQTTClient
 from environment_system.device_manager import DeviceManager
 from environment_system.controller import EnvironmentController
 
