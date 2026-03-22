@@ -9,6 +9,7 @@ gpio = GPIOController(mqtt)
 def callback(topic, message):
     gpio.handle_message(topic, message)
 
+mqtt.set_message_callback(callback)
 mqtt.connect()
 mqtt.subscribe("control/+/state", callback)
 

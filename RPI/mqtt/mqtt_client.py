@@ -107,6 +107,9 @@ class MQTTClient:
     def set_default_callback(self, callback: Callable[[str, dict], None]):
         self._default_callback = callback
 
+    def set_message_callback(self, callback: Callable[[str, dict], None]):
+        self._message_callback = callback
+
     def publish(self, topic: str, message: dict, qos: int = 0, retain: bool = False):
         payload = json.dumps(message)
 
