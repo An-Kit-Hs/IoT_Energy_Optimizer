@@ -27,3 +27,14 @@ AQI_PREVENTIVE_THRESHOLD = 55
 # ------------------ SYSTEM ------------------
 
 LOOP_DELAY = 0.01  # main loop delay (seconds)
+
+# ------------------ GPIO CONFIG ------------------
+
+ACTIVE_LOW = True
+
+DEVICE_PINS = {
+    "ac1": 17,
+    "ac2": 27,
+    "light": 22,
+    "exhaust": 4,
+}
