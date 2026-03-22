@@ -16,7 +16,7 @@ class Camera:
             if use_lores:
                 config = self.picam2.create_preview_configuration(
                     main={"size": (width, height), "format": "RGB888"},
-                    lores={"size": (160, 120), "format": "RGB888"}
+                    lores={"size": (160, 120), "format": "YUV420"}
                 )
                 self.stream = "lores"
             else:
@@ -40,7 +40,15 @@ class Camera:
     def read(self):
         if self.mode == "picamera":
             frame = self.picam2.capture_array(self.stream)
-            return True, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            if self.stream == "lores":
+                # YUV → BGR
+                frame = cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_I420)
+            else:
+                # RGB → BGR
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+            return True, frame
 
         else:
             return self.cap.read()
