@@ -43,7 +43,7 @@ def callback(topic, message):
 
     print(f"[CONTROL] {device} -> {state}")
 
-    if state:
+    if state != None:
         gpio.set_device(device, state=state)
 
     else: 
