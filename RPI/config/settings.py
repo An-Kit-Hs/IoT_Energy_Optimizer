@@ -16,6 +16,7 @@ MQTT_PORT = 1883
 SEN55_TOPIC = "sensors/data/sen55"
 SCD30_TOPIC = "sensors/data/scd30"
 OCC_TOPIC = "cam/occupancy"
+CONTROLS_TOPIC = "control/+/state"
 
 
 # ------------------ AIR QUALITY ------------------

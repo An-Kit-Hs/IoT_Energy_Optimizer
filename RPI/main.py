@@ -6,6 +6,8 @@ from occupancy import OccupancyModule
 from sensors import SensorModule
 from utils import EnvironmentData
 
+from hardware import GPIOService, MQTTGPIOBridge
+
 import config
 import time
 
@@ -26,11 +28,17 @@ sensor = SensorModule()
 # Controller
 controller = EnvironmentController(devices, occupancy)
 
+gpio = GPIOService()
+bridge = MQTTGPIOBridge(gpio)
+
 # Shared state
 people = 0
 
 
 # ------------------ HANDLERS ------------------
+
+def callback(topic, message):
+    bridge.handle_message(topic, message)
 
 def handle_sensor(topic, message):
     global people
@@ -71,6 +79,8 @@ def handle_occupancy(topic, message):
 
 mqtt.connect()
 
+mqtt.set_message_callback(callback)
+mqtt.subscribe(config.CONTROLS_TOPIC, callback)
 mqtt.subscribe(config.SEN55_TOPIC, handle_sensor)
 mqtt.subscribe(config.OCC_TOPIC, handle_occupancy)
 mqtt.subscribe(config.SCD30_TOPIC, handle_sensor)
