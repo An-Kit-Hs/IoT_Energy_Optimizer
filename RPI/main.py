@@ -38,7 +38,18 @@ people = 0
 # ------------------ HANDLERS ------------------
 
 def callback(topic, message):
-    bridge.handle_message(topic, message)
+    state = bridge.parse_payload(message)
+    device = topic.split("/")[1]
+
+    print(f"[CONTROL] {device} -> {state}")
+
+    if state:
+        gpio.set_device(device, state=state)
+
+    else: 
+        print("GPIO prasing error")
+
+
 
 def handle_sensor(topic, message):
     global people
@@ -79,7 +90,6 @@ def handle_occupancy(topic, message):
 
 mqtt.connect()
 
-mqtt.set_message_callback(callback)
 mqtt.subscribe(config.CONTROLS_TOPIC, callback)
 mqtt.subscribe(config.SEN55_TOPIC, handle_sensor)
 mqtt.subscribe(config.OCC_TOPIC, handle_occupancy)

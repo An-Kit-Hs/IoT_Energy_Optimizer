@@ -8,7 +8,7 @@ class MQTTGPIOBridge:
         except:
             return
 
-        state = self._parse_payload(message)
+        state = self.parse_payload(message)
         if state is None:
             print(f"[MQTT] Invalid payload: {message}")
             return
@@ -18,7 +18,7 @@ class MQTTGPIOBridge:
         except ValueError:
             print(f"[MQTT] Unknown device: {device}")
 
-    def _parse_payload(self, message):
+    def parse_payload(self, message):
         try:
             if isinstance(message, dict):
                 val = message.get("power", "").lower()
