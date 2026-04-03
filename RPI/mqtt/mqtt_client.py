@@ -79,13 +79,19 @@ class MQTTClient:
         except json.JSONDecodeError:
             data = payload
 
-        # Route to specific handler
-        if msg.topic in self._callbacks:
-            self._callbacks[msg.topic](msg.topic, data)
+        # Global callback (optional)
+        if hasattr(self, "_message_callback") and self._message_callback:
+            self._message_callback(msg.topic, data)
 
-        elif self._default_callback:
+        # Wildcard topic matching
+        for topic, cb in self._callbacks.items():
+            if mqtt.topic_matches_sub(topic, msg.topic):
+                cb(msg.topic, data)
+                return
+
+        # Fallback
+        if self._default_callback:
             self._default_callback(msg.topic, data)
-
         else:
             print(f"[MQTT] {msg.topic}: {data}")
 
