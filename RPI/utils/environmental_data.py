@@ -8,3 +8,4 @@ class EnvironmentData:
     nox_index: float
     voc_index: float
     pm2_5: float
+    co2 : float

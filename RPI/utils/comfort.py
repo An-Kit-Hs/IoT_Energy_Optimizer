@@ -1,17 +1,20 @@
+import math
+
 class ComfortCalculator:
 
+
     def feels_like(self, temp_c, humidity):
-        humidity = max(0, min(humidity, 100))
+        """
+        Exponential feels-like temperature model
+        temp_c: temperature in Celsius
+        humidity: relative humidity (0–100)
+        """
 
-        # humidity ratio centered at 50%
-        h = (humidity - 50) / 50.0
+        h = humidity / 100  # normalize (0–1)
 
-        # nonlinear effect
-        if temp_c >= 25:
-            effect = h * 2.0
-        elif temp_c >= 22:
-            effect = h * 1.0
-        else:
-            effect = h * 0.5
+        # exponential scaling factor
+        factor = math.exp(0.05 * h * temp_c)
 
-        return temp_c + effect
+        feels_like = temp_c * factor
+
+        return round(feels_like, 2)

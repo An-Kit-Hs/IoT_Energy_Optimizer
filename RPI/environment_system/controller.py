@@ -54,15 +54,16 @@ class EnvironmentController:
 
         # -------- Occupancy logic --------
         if occ["occupied"]:
-            if feels_like > config.COMFORT_TEMP + config.TEMP_BAND:
-                self.devices.turn_on_ac(config.COMFORT_TEMP)
+            if feels_like > 27:
+                set_temp = 18
+            elif feels_like > 25:
+                set_temp = 20
+            elif feels_like > 24:
+                set_temp = 22
+            else:
+                set_temp = 24
 
-            elif feels_like < config.COMFORT_TEMP - config.TEMP_BAND:
-                self.devices.turn_off_ac()
-
-        elif occ["precool"]:
-            print("Precooling")
-            self.devices.turn_on_ac(config.ECO_TEMP)
+            self.devices.set_ac_temp(set_temp)
 
         else:
             self.devices.turn_off_ac()

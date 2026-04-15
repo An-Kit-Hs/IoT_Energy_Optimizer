@@ -49,8 +49,6 @@ def callback(topic, message):
     else: 
         print("GPIO prasing error")
 
-
-
 def handle_sensor(topic, message):
     global people
 
@@ -60,7 +58,8 @@ def handle_sensor(topic, message):
             humidity=message["humidity"],
             nox_index=message["nox"],
             voc_index=message["voc"],
-            pm2_5=message["pm2_5"]
+            pm2_5=message["pm2_5"],
+            co2= message["co2"]
         )
     except KeyError:
         print("[ERROR] Invalid sensor payload:", message)
@@ -72,6 +71,7 @@ def handle_sensor(topic, message):
 
     # -------- Control --------
     controller.process(data, people)
+    print(f"Received data: {data}")
 
 
 def handle_occupancy(topic, message):

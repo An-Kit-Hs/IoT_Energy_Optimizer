@@ -8,7 +8,7 @@
 #include <ir_Panasonic.h>
 #include <ArduinoJson.h>
 
-#define IR_LED_PIN 15
+#define IR_LED_PIN D8
 
 // WiFi
 struct WiFiCred {
@@ -50,6 +50,7 @@ void applyAcState() {
   ac.setTemp(temperatureAC);
 
   if (mode == "cool") ac.setMode(kPanasonicAcCool);
+  else if (mode == "auto") ac.setMode(kPanasonicAcAuto);
   else if (mode == "heat") ac.setMode(kPanasonicAcHeat);
   else if (mode == "dry") ac.setMode(kPanasonicAcDry);
   else if (mode == "fan") ac.setMode(kPanasonicAcFan);
