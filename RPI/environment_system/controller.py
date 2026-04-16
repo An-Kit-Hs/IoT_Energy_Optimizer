@@ -60,6 +60,12 @@ class EnvironmentController:
             # -------- Status Logging --------
             ac_state = self.ac_ctrl.get_state()
 
+            ac_state = self.ac_ctrl.get_state()
+
+            ac_str = "OFF"
+            if ac_state["on"]:
+                ac_str = f"ON({ac_state['mode']},{ac_state['temp']}°C)"
+
             print(
                 f"[STATUS] "
                 f"Occ:{occ['state']}({people}) | "
@@ -67,8 +73,7 @@ class EnvironmentController:
                 f"T:{self.safe_fmt(data.temperature)}°C "
                 f"H:{self.safe_fmt(data.humidity)}% "
                 f"F:{self.safe_fmt(feels_like)}°C | "
-                f"AC:{'ON' if ac_state['on'] else 'OFF'}"
-                f"{f'({ac_state['mode']},{ac_state['temp']}°C)' if ac_state['on'] else ''} | "
+                f"AC:{ac_str} | "
                 f"EX:{'ON' if self.ex_ctrl.is_on() else 'OFF'} | "
                 f"L:{'ON' if self.devices.is_lights_on() else 'OFF'}"
             )
