@@ -87,6 +87,8 @@ def handle_occupancy(topic, message):
         people = message.get("count", message.get("payload", 0))
     except Exception:
         people = 0
+    
+    controller.process(last_data, people)
 
 
 # ------------------ MQTT SETUP ------------------

@@ -26,7 +26,7 @@ AQI_PREVENTIVE_THRESHOLD = 55
 
 # ------------------ OCCUPANCY ------------------
 
-EMPTY_DELAY = 300        # seconds before switching to EMPTY
+EMPTY_DELAY = 120        # seconds before switching to EMPTY
 MIN_ON_TIME = 10         # minimum seconds to stay ON
 MIN_OFF_TIME = 10        # minimum seconds to stay OFF
 
