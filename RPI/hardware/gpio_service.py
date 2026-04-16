@@ -1,4 +1,4 @@
-import RPi.GPIO as GPIO #type: ignore
+import RPi.GPIO as GPIO  # type: ignore
 import config
 
 
@@ -11,15 +11,20 @@ class GPIOService:
 
         GPIO.setmode(GPIO.BCM)
 
+        print("[GPIO] Initializing...")
         for device, pin in self.device_pins.items():
             GPIO.setup(pin, GPIO.OUT)
             self._write(pin, False)
+            print(f"  - {device} → GPIO {pin}")
 
     # -------- PUBLIC API --------
 
     def set_device(self, device, state: bool):
         if device not in self.device_pins:
-            raise ValueError(f"Unknown device: {device}")
+            print(f"[GPIO] Unknown device: {device}")
+            return
+
+        state = bool(state)
 
         if self.states[device] == state:
             return
@@ -35,8 +40,11 @@ class GPIOService:
         return self.states.get(device)
 
     def toggle_device(self, device):
-        current = self.get_device(device)
-        self.set_device(device, not current)
+        if device not in self.states:
+            print(f"[GPIO] Unknown device: {device}")
+            return
+
+        self.set_device(device, not self.states[device])
 
     def all_devices(self):
         return self.states.copy()

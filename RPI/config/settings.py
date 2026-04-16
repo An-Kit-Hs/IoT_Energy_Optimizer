@@ -36,6 +36,6 @@ ACTIVE_LOW = True
 DEVICE_PINS = {
     "ac1": 17,
     "ac2": 27,
-    "light": 22,
+    "light1": 22,
     "exhaust": 4,
 }
