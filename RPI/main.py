@@ -106,5 +106,4 @@ try:
 
 except KeyboardInterrupt:
     print("Shutting down...")
-    occupancy.save()
     mqtt.disconnect()

@@ -1,48 +1,52 @@
 import time
-from .state import OccupancyState
-from .pattern import OccupancyPatternModel
-from .predictor import OccupancyPredictor
 
 
 class OccupancyModule:
-
-    SAVE_INTERVAL = 60
+    EMPTY_DELAY = 300        # seconds before switching to EMPTY
+    MIN_ON_TIME = 10         # minimum seconds to stay ON
+    MIN_OFF_TIME = 10        # minimum seconds to stay OFF
 
     def __init__(self):
-        self.state = OccupancyState()
-        self.pattern = OccupancyPatternModel()
-        self.predictor = OccupancyPredictor()
-
-        self._last_save = time.time()
+        self.state = "EMPTY"
+        self.last_seen = 0
+        self.last_change = time.time()
 
     def update(self, count: int):
-        state = self.state.update(count)
-        occupied = state == "OCCUPIED"
-
-        self.pattern.update(occupied)
-
-        probability = self.pattern.probability()
-        confidence = self.pattern.confidence()
-
-        precool = self.predictor.should_precool(
-            probability,
-            confidence
-        )
-
-        # periodic save
         now = time.time()
-        if now - self._last_save > self.SAVE_INTERVAL:
-            self.pattern.save()
-            self._last_save = now
 
+        # Detect presence
+        if count > 0:
+            self.last_seen = now
+
+        # --- Desired state (with hysteresis) ---
+        if count > 0:
+            desired_state = "OCCUPIED"
+        elif now - self.last_seen > self.EMPTY_DELAY:
+            desired_state = "EMPTY"
+        else:
+            desired_state = self.state  # stay as is during delay window
+
+        # --- Rapid switching protection ---
+        time_in_state = now - self.last_change
+
+        if self.state == "OCCUPIED":
+            if desired_state == "EMPTY" and time_in_state < self.MIN_ON_TIME:
+                return self._result(count)
+
+        elif self.state == "EMPTY":
+            if desired_state == "OCCUPIED" and time_in_state < self.MIN_OFF_TIME:
+                return self._result(count)
+
+        # --- Apply state change ---
+        if desired_state != self.state:
+            self.state = desired_state
+            self.last_change = now
+
+        return self._result(count)
+
+    def _result(self, count):
         return {
-            "state": state,
-            "occupied": occupied,
-            "probability": probability,
-            "confidence": confidence,
-            "precool": precool,
+            "state": self.state,
+            "occupied": self.state == "OCCUPIED",
             "count": count
         }
-
-    def save(self):
-        self.pattern.save()
