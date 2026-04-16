@@ -11,6 +11,38 @@ from hardware import GPIOService, MQTTGPIOBridge
 import config
 import time
 
+import atexit
+import signal
+import sys
+import traceback
+from datetime import datetime
+
+# Exception logging
+def log(msg):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+
+def log_exit():
+    log("[SYSTEM] Exiting cleanly...")
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    log("[CRASH] Unhandled exception:")
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
+
+
+def handle_signal(signum, frame):
+    log(f"[SYSTEM] Received signal: {signum}")
+    sys.exit(0)
+
+
+# Register handlers
+atexit.register(log_exit)
+sys.excepthook = handle_exception
+
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
+
 # ------------------ INIT ------------------
 
 mqtt = MQTTClient(config.MQTT_BROKER)
@@ -64,7 +96,7 @@ def control_topic(device):
     return f"control/{device}/state"
     
 def reset_retained_states():
-    print("[SYSTEM] Clearing retained states via MQTT...")
+    log("[SYSTEM] Starting system, clearing old junk...")
 
     for device in config.DEVICE_PINS:
         topic = control_topic(device)
@@ -75,11 +107,6 @@ def reset_retained_states():
 # ------------------ HANDLERS ------------------
 
 def callback(topic, message):
-    # Ignore retained messages
-    if getattr(message, "retain", False):
-        print(f"[MQTT] Ignored retained: {topic}")
-        return
-
     state = bridge.parse_payload(message)
 
     parts = topic.split("/")
@@ -90,7 +117,7 @@ def callback(topic, message):
     if state is not None and device:
         gpio.set_device(device, state)
     else:
-        print("[CONTROL] Invalid message")
+        log(f"[CONTROL] Invalid message: {message}")
 
 
 def handle_sensor(topic, message):
@@ -133,6 +160,6 @@ try:
         time.sleep(config.LOOP_DELAY)
 
 except KeyboardInterrupt:
-    print("Shutting down...")
+    log("[SYSTEM] Keyboard interrupt")
     gpio.cleanup()
     mqtt.disconnect()
