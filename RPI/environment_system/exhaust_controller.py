@@ -17,6 +17,15 @@ class ExhaustController:
         # Timing protection
         self.MIN_ON_TIME = 10
         self.MIN_OFF_TIME = 10
+        
+    def set_external_state(self, state: bool):
+        self._on = state
+        self._last_change = time.time()
+
+        if state:
+            self.devices.turn_on_exhaust()
+        else:
+            self.devices.turn_off_exhaust()
 
     def update(self, score, trend_rising):
         now = time.time()

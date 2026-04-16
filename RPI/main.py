@@ -115,7 +115,7 @@ def callback(topic, message):
     print(f"[CONTROL] {device} -> {state}")
 
     if state is not None and device:
-        gpio.set_device(device, state)
+        controller.handle_command(device, state)
     else:
         log(f"[CONTROL] Invalid message: {message}")
 

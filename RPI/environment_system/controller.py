@@ -18,7 +18,28 @@ class EnvironmentController:
         
     def safe_fmt(self, value, fmt=".1f"):
         return format(value, fmt) if isinstance(value, (int, float)) else "N/A"
+    
+    def handle_command(self, device, state):
+        """
+        External command entry point (MQTT, UI, etc.)
+        """
 
+        if device.startswith("light"):
+            if state:
+                self.devices.turn_on_lights()
+            else:
+                self.devices.turn_off_lights()
+
+        elif device == "exhaust":
+            # override exhaust controller
+            self.ex_ctrl.set_external_state(state)
+
+        elif device.startswith("ac"):
+            # override AC controller
+            self.ac_ctrl.set_external_state(state)
+
+        else:
+            print(f"[COMMAND] Unknown device: {device}")
 
     def process(self, data, people):
         try:

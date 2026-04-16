@@ -32,7 +32,16 @@ class ACController:
         temp = max(18, min(26, temp))
 
         return round(temp)
+    
+    def set_external_state(self, state: bool):
+        self._on = state
+        self._last_change = time.time()
 
+        if state:
+            # default safe values
+            self.devices.turn_on_ac(self._temp or 24, self._mode or "cool")
+        else:
+            self.devices.turn_off_ac()
 
     def update(self, occupied, feels_like, humidity, exhaust_on):
         now = time.time()
