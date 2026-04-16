@@ -49,30 +49,38 @@ def callback(topic, message):
     else: 
         print("GPIO prasing error")
 
+last_data = {
+    "temperature": None,
+    "humidity": None,
+    "nox": None,
+    "voc": None,
+    "pm2_5": None,
+    "co2": None
+}
+
 def handle_sensor(topic, message):
-    global people
+    global last_data
 
-    try:
-        data = EnvironmentData(
-            temperature=message["temperature"],
-            humidity=message["humidity"],
-            nox_index=message["nox"],
-            voc_index=message["voc"],
-            pm2_5=message["pm2_5"],
-            co2= message["co2"]
-        )
-        print(data)
-    except KeyError:
-        print("[ERROR] Invalid sensor payload:", message)
-        return
+    print("[RAW SENSOR MESSAGE]", message)
 
-    # -------- Sensor processing --------
+    # Merge new values
+    for key in last_data:
+        if key in message:
+            last_data[key] = message[key]
+
+    data = EnvironmentData(
+        temperature=last_data["temperature"],
+        humidity=last_data["humidity"],
+        nox_index=last_data["nox"],
+        voc_index=last_data["voc"],
+        pm2_5=last_data["pm2_5"],
+        co2=last_data["co2"]
+    )
+
+    print(data)
+
     processed = sensor.update(data)
-    data = processed["data"]
-
-    # -------- Control --------
-    controller.process(data, people)
-    print(f"Received data: {data}")
+    controller.process(processed["data"], people)
 
 
 def handle_occupancy(topic, message):

@@ -1,11 +1,18 @@
-from dataclasses import dataclass
+from typing import Optional
 
-@dataclass
 class EnvironmentData:
-
-    temperature: float
-    humidity: float
-    nox_index: float
-    voc_index: float
-    pm2_5: float
-    co2 : float
+    def __init__(
+        self,
+        temperature: Optional[float] = None,
+        humidity: Optional[float] = None,
+        nox_index: Optional[float] = None,
+        voc_index: Optional[float] = None,
+        pm2_5: Optional[float] = None,
+        co2: Optional[float] = None
+    ):
+        self.temperature = temperature
+        self.humidity = humidity
+        self.nox_index = nox_index
+        self.voc_index = voc_index
+        self.pm2_5 = pm2_5
+        self.co2 = co2
