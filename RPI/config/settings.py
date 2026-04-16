@@ -24,6 +24,11 @@ CONTROLS_TOPIC = "control/+/state"
 AQI_EMERGENCY_THRESHOLD = 75
 AQI_PREVENTIVE_THRESHOLD = 55
 
+# ------------------ OCCUPANCY ------------------
+
+EMPTY_DELAY = 300        # seconds before switching to EMPTY
+MIN_ON_TIME = 10         # minimum seconds to stay ON
+MIN_OFF_TIME = 10        # minimum seconds to stay OFF
 
 # ------------------ SYSTEM ------------------
 
