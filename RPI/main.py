@@ -15,41 +15,23 @@ import time
 
 mqtt = MQTTClient(config.MQTT_BROKER)
 
-# Devices
 devices = DeviceManager(mqtt)
 devices.add_ac("ac1")
 devices.add_ac("ac2")
 devices.add_light("light1")
 devices.add_exhaust("exhaust")
 
-# Modules
 occupancy = OccupancyModule()
 sensor = SensorModule()
 
-# Controller
 controller = EnvironmentController(devices, occupancy)
 
 gpio = GPIOService()
 bridge = MQTTGPIOBridge(gpio)
 
-# Shared state
 people = 0
 
-
-# ------------------ HANDLERS ------------------
-
-def callback(topic, message):
-    state = bridge.parse_payload(message)
-    device = topic.split("/")[1]
-
-    print(f"[CONTROL] {device} -> {state}")
-
-    if state != None:
-        gpio.set_device(device, state=state)
-
-    else: 
-        print("GPIO prasing error")
-
+# Shared sensor cache
 last_data = {
     "temperature": None,
     "humidity": None,
@@ -59,15 +41,10 @@ last_data = {
     "co2": None
 }
 
-def handle_sensor(topic, message):
-    global last_data
+# ------------------ HELPERS ------------------
 
-    # Merge new values
-    for key in last_data:
-        if key in message:
-            last_data[key] = message[key]
-
-    data = EnvironmentData(
+def build_environment():
+    return EnvironmentData(
         temperature=last_data["temperature"],
         humidity=last_data["humidity"],
         nox_index=last_data["nox"],
@@ -76,8 +53,44 @@ def handle_sensor(topic, message):
         co2=last_data["co2"]
     )
 
+
+def run_controller():
+    data = build_environment()
     processed = sensor.update(data)
+
     controller.process(processed["data"], people)
+
+
+# ------------------ HANDLERS ------------------
+
+def callback(topic, message):
+    # Ignore retained messages
+    if getattr(message, "retain", False):
+        print(f"[MQTT] Ignored retained: {topic}")
+        return
+
+    state = bridge.parse_payload(message)
+
+    parts = topic.split("/")
+    device = parts[1] if len(parts) > 1 else None
+
+    print(f"[CONTROL] {device} -> {state}")
+
+    if state is not None and device:
+        gpio.set_device(device, state)
+    else:
+        print("[CONTROL] Invalid message")
+
+
+def handle_sensor(topic, message):
+    global last_data
+
+    # Merge incoming data
+    for key in last_data:
+        if key in message:
+            last_data[key] = message[key]
+
+    run_controller()
 
 
 def handle_occupancy(topic, message):
@@ -87,8 +100,8 @@ def handle_occupancy(topic, message):
         people = message.get("count", message.get("payload", 0))
     except Exception:
         people = 0
-    
-    controller.process(last_data, people)
+
+    run_controller()
 
 
 # ------------------ MQTT SETUP ------------------
@@ -97,11 +110,10 @@ mqtt.connect()
 
 mqtt.subscribe(config.CONTROLS_TOPIC, callback)
 mqtt.subscribe(config.SEN55_TOPIC, handle_sensor)
-mqtt.subscribe(config.OCC_TOPIC, handle_occupancy)
 mqtt.subscribe(config.SCD30_TOPIC, handle_sensor)
+mqtt.subscribe(config.OCC_TOPIC, handle_occupancy)
 
-
-# ------------------ MAIN LOOP ------------------
+# ------------------ LOOP ------------------
 
 try:
     while True:
@@ -109,4 +121,5 @@ try:
 
 except KeyboardInterrupt:
     print("Shutting down...")
+    gpio.cleanup()
     mqtt.disconnect()
