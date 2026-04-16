@@ -7,7 +7,7 @@ TEMP_BAND = 1.5          # hysteresis band (°C)
 
 # ------------------ MQTT ------------------
 
-MQTT_BROKER = "localhost"
+MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 
 
