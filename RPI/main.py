@@ -61,8 +61,6 @@ last_data = {
 def handle_sensor(topic, message):
     global last_data
 
-    print("[RAW SENSOR MESSAGE]", message)
-
     # Merge new values
     for key in last_data:
         if key in message:
@@ -77,8 +75,6 @@ def handle_sensor(topic, message):
         co2=last_data["co2"]
     )
 
-    print(data)
-
     processed = sensor.update(data)
     controller.process(processed["data"], people)
 
@@ -90,9 +86,6 @@ def handle_occupancy(topic, message):
         people = message.get("count", message.get("payload", 0))
     except Exception:
         people = 0
-
-    # Debug
-    print(f"[OCCUPANCY] People: {people}")
 
 
 # ------------------ MQTT SETUP ------------------

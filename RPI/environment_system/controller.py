@@ -72,7 +72,7 @@ class EnvironmentController:
 
             # -------- Safe logging --------
             print(
-                f"AQI:{self.safe_fmt(score)} "
+                f"[STATUS] AQI:{self.safe_fmt(score)} "
                 f"Temp:{self.safe_fmt(data.temperature)} "
                 f"Humidity:{self.safe_fmt(data.humidity)} "
                 f"Feels:{self.safe_fmt(feels_like)} "
