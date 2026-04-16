@@ -1,8 +1,8 @@
 from sensors import SensorModule
 from utils import ComfortCalculator
 from air_quality import AirQualityModule
-from ac_controller import ACController
-from exhaust_controller import ExhaustController
+from .ac_controller import ACController
+from .exhaust_controller import ExhaustController
 
 class EnvironmentController:
 
