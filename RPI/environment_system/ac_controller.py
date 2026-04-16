@@ -19,6 +19,20 @@ class ACController:
         # Timing protection
         self.MIN_ON_TIME = 30
         self.MIN_OFF_TIME = 20
+        
+    def _compute_temp(self, feels_like):
+        # Base comfort
+        base = 24
+
+        # Cooling strength factor
+        k = 0.5
+
+        # Adjust temperature
+        temp = base - k * (feels_like - base)
+        temp = max(18, min(26, temp))
+
+        return round(temp)
+
 
     def update(self, occupied, feels_like, humidity, exhaust_on):
         now = time.time()
@@ -51,17 +65,13 @@ class ACController:
                 desired = False
         else:
             desired = False
+            
+        if temp is not None and  self._temp is not None and abs(temp - self._temp) < 1:
+            temp = self._temp
 
         # -------- Temp selection --------
         if desired:
-            if feels_like > 30:
-                temp = 18
-            elif feels_like > 28:
-                temp = 20
-            elif feels_like > 26:
-                temp = 22
-            else:
-                temp = 24
+            temp = self._compute_temp(feels_like)
 
         # -------- Anti flip --------
         elapsed = now - self._last_change

@@ -15,7 +15,7 @@ class EnvironmentController:
         
         self.ac_ctrl = ACController(devices)
         self.ex_ctrl = ExhaustController(devices)
-
+        
     def safe_fmt(self, value, fmt=".1f"):
         return format(value, fmt) if isinstance(value, (int, float)) else "N/A"
 
