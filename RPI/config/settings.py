@@ -13,8 +13,8 @@ MQTT_PORT = 1883
 
 # ------------------ TOPICS ------------------
 
-SEN55_TOPIC = "sensors/data/sen55"
-SCD30_TOPIC = "sensors/data/scd30"
+SEN55_TOPIC = "sensor/data/sen55"
+SCD30_TOPIC = "sensor/data/scd30"
 OCC_TOPIC = "cam/occupancy"
 CONTROLS_TOPIC = "control/+/state"
 
