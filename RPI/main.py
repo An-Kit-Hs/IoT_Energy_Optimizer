@@ -61,6 +61,7 @@ def handle_sensor(topic, message):
             pm2_5=message["pm2_5"],
             co2= message["co2"]
         )
+        print(data)
     except KeyError:
         print("[ERROR] Invalid sensor payload:", message)
         return
