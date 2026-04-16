@@ -1,5 +1,6 @@
 from .devices.ac import ACDevice
 from .devices.exhaust import ExhaustDevice
+from .devices.light import LightDevice
 
 
 class DeviceManager:
@@ -9,6 +10,7 @@ class DeviceManager:
 
         self.acs = {}
         self.exhausts = {}
+        self.lights = {}
 
     # ---------- Add devices ----------
     def add_ac(self, name):
@@ -17,8 +19,11 @@ class DeviceManager:
     def add_exhaust(self, name):
         self.exhausts[name] = ExhaustDevice(self.mqtt, name)
 
+    def add_light(self, name):
+        self.lights[name] = LightDevice(self.mqtt, name)
+
     # ---------- AC control ----------
-    def turn_on_ac(self, temp = 24, mode="cool"):
+    def turn_on_ac(self, temp=24, mode="cool"):
         for ac in self.acs.values():
             ac.turn_on(temp, mode)
 
@@ -36,9 +41,6 @@ class DeviceManager:
 
     # ---------- Load balancing ----------
     def turn_on_single_ac(self, temp, mode="cool"):
-        """
-        Turn on only one AC (first available OFF unit)
-        """
         for ac in self.acs.values():
             if ac.state == "OFF":
                 ac.turn_on(temp, mode)
@@ -58,3 +60,19 @@ class DeviceManager:
 
     def is_exhaust_on(self):
         return any(ex.state == "ON" for ex in self.exhausts.values())
+
+    # ---------- Lights ----------
+    def turn_on_lights(self):
+        for light in self.lights.values():
+            light.turn_on()
+
+    def turn_off_lights(self):
+        for light in self.lights.values():
+            light.turn_off()
+
+    def is_lights_on(self):
+        return any(light.state == "ON" for light in self.lights.values())
+    
+    def turn_on_zone_light(self, name):
+        if name in self.lights:
+            self.lights[name].turn_on()

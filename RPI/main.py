@@ -19,6 +19,7 @@ mqtt = MQTTClient(config.MQTT_BROKER)
 devices = DeviceManager(mqtt)
 devices.add_ac("ac1")
 devices.add_ac("ac2")
+devices.add_light("light1")
 devices.add_exhaust("exhaust")
 
 # Modules
