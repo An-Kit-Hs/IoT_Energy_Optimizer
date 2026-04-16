@@ -21,6 +21,13 @@ class EnvironmentController:
         try:
             # -------- Occupancy --------
             occ = self.occupancy.update(people)
+            print(f"[DEBUG] occ: {occ}")
+            
+                        # -------- Lighting control --------
+            if occ.get("occupied"):
+                self.devices.turn_on_lights()
+            else:
+                self.devices.turn_off_lights()
 
             # -------- Sensor smoothing --------
             sensor = self.sensor.update(data)
