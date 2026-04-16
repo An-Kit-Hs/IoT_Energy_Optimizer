@@ -26,6 +26,7 @@ AQI_PREVENTIVE_THRESHOLD = 55
 
 # ------------------ OCCUPANCY ------------------
 
+POSITIVE_DELAY = 3       # seconds for OCCUPIED trigger
 EMPTY_DELAY = 120        # seconds before switching to EMPTY
 MIN_ON_TIME = 10         # minimum seconds to stay ON
 MIN_OFF_TIME = 10        # minimum seconds to stay OFF
