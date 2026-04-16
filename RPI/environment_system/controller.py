@@ -53,7 +53,7 @@ class EnvironmentController:
         )
 
         # -------- Occupancy logic --------
-        if occ["occupied"]:
+        if occ["occupied"] and feels_like:
             if feels_like > 27:
                 set_temp = 18
             elif feels_like > 25:

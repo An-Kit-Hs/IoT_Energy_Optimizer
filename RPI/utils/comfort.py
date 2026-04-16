@@ -2,19 +2,33 @@ import math
 
 class ComfortCalculator:
 
-
     def feels_like(self, temp_c, humidity):
         """
         Exponential feels-like temperature model
-        temp_c: temperature in Celsius
-        humidity: relative humidity (0–100)
         """
 
-        h = humidity / 100  # normalize (0–1)
+        try:
+            # sanitize inputs
+            if temp_c is None:
+                return None
 
-        # exponential scaling factor
-        factor = math.exp(0.05 * h * temp_c)
+            if humidity is None:
+                # fallback: assume neutral humidity (50%)
+                humidity = 50
 
-        feels_like = temp_c * factor
+            temp_c = float(temp_c)
+            humidity = float(humidity)
 
-        return round(feels_like, 2)
+            # clamp humidity to valid range
+            humidity = max(0, min(humidity, 100))
+
+            h = humidity / 100  # normalize (0–1)
+
+            factor = math.exp(0.05 * h * temp_c)
+            feels_like = temp_c * factor
+
+            return round(feels_like, 2)
+
+        except Exception as e:
+            print(f"[Comfort] feels_like error: {e}")
+            return None
