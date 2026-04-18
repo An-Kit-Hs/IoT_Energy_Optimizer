@@ -319,7 +319,10 @@ void loop() {
 
       if (!error) {
         StaticJsonDocument<200> doc;
+        doc["pm1"] = pm1;
         doc["pm2_5"] = pm2_5;
+        doc["pm4"] = pm4;
+        doc["pm10"] = pm10;
         doc["voc"] = voc;
         doc["nox"] = nox;
 
