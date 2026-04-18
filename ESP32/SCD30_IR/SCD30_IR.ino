@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <SensirionI2cScd30.h>
+#include <SensirionI2CSen5x.h>
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <ir_Panasonic.h>
@@ -10,7 +11,21 @@
 
 #define IR_LED_PIN D8
 
-// WiFi
+/*
+==================== WIRING ====================
+D2 (GPIO4) -> SDA
+D1 (GPIO5) -> SCL
+
+SCD30 -> 0x61
+SEN55 -> 0x69
+
+IR LED:
+D8 -> Resistor -> IR LED (+)
+IR LED (-) -> GND
+===============================================
+*/
+
+// ---------------- WiFi ----------------
 struct WiFiCred {
   const char* ssid;
   const char* password;
@@ -23,27 +38,43 @@ WiFiCred wifiList[] = {
 
 const int wifiCount = sizeof(wifiList) / sizeof(wifiList[0]);
 
-// MQTT
+// ---------------- MQTT ----------------
 const char* mqtt_server = "broker.hivemq.com";
+
+const char* topic_ac = "control/ac/command";
+
+const char* topic_scd30_data = "sensor/data/scd30";
+const char* topic_sen55_data = "sensor/data/sen55";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// Sensor
-SensirionI2cScd30 sensor;
+// ---------------- Sensors ----------------
+SensirionI2cScd30 scd30;
+SensirionI2CSen5x sen55;
 
-// IR AC
+// SCD30
+float co2, temp_scd, hum_scd;
+
+// SEN55
+float pm1, pm2_5, pm4, pm10;
+float temp_sen, hum_sen, voc, nox;
+
+// ---------------- IR AC ----------------
 IRPanasonicAc ac(IR_LED_PIN);
 
-// AC state
 bool powerState = false;
 uint8_t temperatureAC = 24;
 String mode = "cool";
 
-float co2, temp, hum;
+// ---------------- Timing ----------------
+unsigned long lastReconnectAttempt = 0;
+unsigned long lastMeasurement = 0;
+const unsigned long measurementInterval = 120000; // FIXED 2 minutes
+
+// ---------------- Functions ----------------
 
 void applyAcState() {
-
   if (powerState) ac.on();
   else ac.off();
 
@@ -56,44 +87,45 @@ void applyAcState() {
   else if (mode == "fan") ac.setMode(kPanasonicAcFan);
 
   ac.send();
-
   Serial.println("AC command sent");
 }
+
+// ---------------- MQTT Callback ----------------
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   String message;
-
   for (int i = 0; i < length; i++)
     message += (char)payload[i];
 
-  Serial.print("MQTT Received: ");
+  Serial.print("Topic: ");
+  Serial.println(topic);
+  Serial.print("Message: ");
   Serial.println(message);
 
-  StaticJsonDocument<200> doc;
+  // -------- AC CONTROL --------
+  if (String(topic) == topic_ac) {
 
-  if (deserializeJson(doc, message))
-    return;
+    StaticJsonDocument<200> doc;
+    if (deserializeJson(doc, message)) return;
 
-  if (doc.containsKey("power")) {
-    String p = doc["power"];
-    powerState = (p == "on");
+    if (doc.containsKey("power"))
+      powerState = (doc["power"] == "on");
+
+    if (doc.containsKey("temp"))
+      temperatureAC = constrain(doc["temp"], 16, 30);
+
+    if (doc.containsKey("mode"))
+      mode = doc["mode"].as<String>();
+
+    applyAcState();
   }
-
-  if (doc.containsKey("temp")) {
-    temperatureAC = constrain(doc["temp"], 16, 30);
-  }
-
-  if (doc.containsKey("mode")) {
-    mode = doc["mode"].as<String>();
-  }
-
-  applyAcState();
 }
 
-void connectWiFi() {
+// ---------------- WiFi ----------------
 
-  Serial.println("Connecting to WiFi...");
+void connectWiFi() {
+  Serial.println("Connecting WiFi...");
 
   for (int i = 0; i < wifiCount; i++) {
 
@@ -103,7 +135,6 @@ void connectWiFi() {
     WiFi.begin(wifiList[i].ssid, wifiList[i].password);
 
     int retry = 0;
-
     while (WiFi.status() != WL_CONNECTED && retry < 20) {
       delay(500);
       Serial.print(".");
@@ -112,98 +143,138 @@ void connectWiFi() {
 
     if (WiFi.status() == WL_CONNECTED) {
       Serial.println("\nConnected!");
-      Serial.print("IP: ");
       Serial.println(WiFi.localIP());
       return;
     }
 
-    Serial.println("\nFailed, trying next...");
     WiFi.disconnect();
   }
 
-  Serial.println("Could not connect to any WiFi!");
+  Serial.println("WiFi failed!");
 }
 
+// ---------------- MQTT ----------------
+
 void reconnectMQTT() {
+  Serial.print("Connecting MQTT...");
 
-  while (!client.connected()) {
+  if (client.connect("NodeMCU_AIR")) {
+    Serial.println("Connected");
 
-    Serial.print("Connecting MQTT...");
+    client.subscribe(topic_ac);
 
-    if (client.connect("NodeMCU_SCD30_AC")) {
-
-      Serial.println("Connected");
-
-      client.subscribe("control/ac/command");
-
-    } else {
-
-      Serial.print("Failed rc=");
-      Serial.println(client.state());
-      delay(2000);
-    }
+  } else {
+    Serial.print("Failed rc=");
+    Serial.println(client.state());
   }
 }
 
-void setup() {
+// ---------------- Setup ----------------
 
+void setup() {
   Serial.begin(9600);
 
   Wire.begin(D2, D1);
 
+  // AC
   ac.begin();
   ac.setFan(kPanasonicAcFanAuto);
   ac.setSwingVertical(true);
-  ac.setSwingHorizontal(false);
 
+  // WiFi + MQTT
   connectWiFi();
-
   client.setServer(mqtt_server, 1883);
   client.setCallback(mqttCallback);
 
-  sensor.begin(Wire, SCD30_I2C_ADDR_61);
-
-  sensor.stopPeriodicMeasurement();
-  sensor.softReset();
-
+  // SCD30
+  scd30.begin(Wire, SCD30_I2C_ADDR_61);
+  scd30.stopPeriodicMeasurement();
+  scd30.softReset();
   delay(2000);
+  scd30.startPeriodicMeasurement(0);
 
-  sensor.startPeriodicMeasurement(0);
+  // SEN55
+  sen55.begin(Wire);
+  sen55.deviceReset();
+  delay(1000);
+  sen55.startMeasurement();
+
+  Serial.println("System ready");
 }
+
+// ---------------- Loop ----------------
 
 void loop() {
 
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi lost. Reconnecting...");
+  if (WiFi.status() != WL_CONNECTED)
     connectWiFi();
+
+  if (!client.connected()) {
+    if (millis() - lastReconnectAttempt > 5000) {
+      lastReconnectAttempt = millis();
+      reconnectMQTT();
+    }
+  } else {
+    client.loop();
   }
 
-  if (!client.connected())
-    reconnectMQTT();
+  // -------- FIXED 2 MIN MEASUREMENT --------
+  if (millis() - lastMeasurement >= measurementInterval) {
 
-  client.loop();
+    lastMeasurement = millis();
 
-  delay(2000);
+    Serial.println("\n=== Measurement ===");
 
-  sensor.blockingReadMeasurementData(co2, temp, hum);
+    // -------- SCD30 --------
+    if (scd30.dataReady()) {
+      scd30.readMeasurementData(co2, temp_scd, hum_scd);
 
-  Serial.print("CO2: ");
-  Serial.println(co2);
+      Serial.print("CO2: "); Serial.println(co2);
+      Serial.print("Temp(SCD): "); Serial.println(temp_scd);
+      Serial.print("Hum(SCD): "); Serial.println(hum_scd);
+    }
 
-  Serial.print("Temp: ");
-  Serial.println(temp);
+    // -------- SEN55 --------
+    uint16_t error = sen55.readMeasuredValues(
+      pm1, pm2_5, pm4, pm10,
+      temp_sen, hum_sen, voc, nox
+    );
 
-  Serial.print("Humidity: ");
-  Serial.println(hum);
+    if (!error) {
+      Serial.print("PM2.5: "); Serial.println(pm2_5);
+      Serial.print("VOC: "); Serial.println(voc);
+      Serial.print("NOx: "); Serial.println(nox);
+    }
 
-  StaticJsonDocument<200> doc;
+    // -------- Publish SCD30 --------
+    StaticJsonDocument<150> doc_scd30;
 
-  doc["co2"] = co2;
-  doc["temperature"] = temp;
-  doc["humidity"] = hum;
+    doc_scd30["co2"] = co2;
+    doc_scd30["temperature"] = temp_scd;
+    doc_scd30["humidity"] = hum_scd;
 
-  char buffer[200];
-  serializeJson(doc, buffer);
+    char buffer_scd30[150];
+    serializeJson(doc_scd30, buffer_scd30);
+    client.publish(topic_scd30_data, buffer_scd30);
 
-  client.publish("sensor/data/scd30", buffer);
+    // -------- Publish SEN55 --------
+    StaticJsonDocument<200> doc_sen55;
+
+    doc_sen55["pm1"] = pm1;
+    doc_sen55["pm2_5"] = pm2_5;
+    doc_sen55["pm4"] = pm4;
+    doc_sen55["pm10"] = pm10;
+
+    doc_sen55["temperature"] = temp_sen;
+    doc_sen55["humidity"] = hum_sen;
+
+    doc_sen55["voc"] = voc;
+    doc_sen55["nox"] = nox;
+
+    char buffer_sen55[200];
+    serializeJson(doc_sen55, buffer_sen55);
+    client.publish(topic_sen55_data, buffer_sen55);
+
+    Serial.println("Published SCD30 & SEN55\n");
+  }
 }
