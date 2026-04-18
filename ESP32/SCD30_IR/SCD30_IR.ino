@@ -10,22 +10,8 @@
 #include <ArduinoJson.h>
 
 // ---------------- IR ----------------
-#define IR_LED_PIN_AC1 4
-#define IR_LED_PIN_AC2 5
-
-/*
-==================== WIRING ====================
-D2 (GPIO4) -> SDA
-D1 (GPIO5) -> SCL
-
-SCD30 -> 0x61
-SEN55 -> 0x69
-
-IR LED:
-D8 -> Resistor -> IR LED (+)
-IR LED (-) -> GND
-===============================================
-*/
+#define IR_LED_PIN_AC1 D8
+#define IR_LED_PIN_AC2 D7
 
 // ---------------- MULTI WIFI ----------------
 struct WiFiCred {
@@ -83,7 +69,45 @@ unsigned long lastReconnectAttempt = 0;
 unsigned long lastMeasurement = 0;
 const unsigned long interval = 120000;
 
-// ---------------- WIFI CONNECT ----------------
+// ---------------- PARSERS ----------------
+bool parsePower(JsonVariant val) {
+  if (val.is<bool>()) return val.as<bool>();
+
+  if (val.is<const char*>()) {
+    String s = val.as<String>();
+    s.toLowerCase();
+    return (s == "on" || s == "1" || s == "true");
+  }
+
+  if (val.is<int>()) return val.as<int>() == 1;
+
+  return false;
+}
+
+uint8_t parseTemp(JsonVariant val) {
+  int t = 24;
+
+  if (val.is<const char*>())
+    t = atoi(val.as<const char*>());
+  else if (val.is<int>())
+    t = val.as<int>();
+
+  return constrain(t, 16, 30);
+}
+
+String parseMode(JsonVariant val) {
+  if (!val.is<const char*>()) return "cool";
+
+  String m = val.as<String>();
+  m.toLowerCase();
+
+  if (m == "cool" || m == "auto" || m == "heat" || m == "dry" || m == "fan")
+    return m;
+
+  return "cool";
+}
+
+// ---------------- WIFI ----------------
 void connectWiFi() {
   Serial.println("Connecting WiFi...");
 
@@ -141,55 +165,68 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   String t = String(topic);
 
-  // AC1
+  // ===== AC1 =====
   if (t == topic_ac1_state) {
+
     if (doc.containsKey("power"))
-      power1 = (doc["power"] == "on");
+      power1 = parsePower(doc["power"]);
 
     applyAc(ac1, power1, temp1, mode1);
   }
 
   else if (t == topic_ac1_command) {
-    if (doc.containsKey("temp"))
-      temp1 = constrain(doc["temp"], 16, 30);
 
-    if (doc.containsKey("mode"))
-      mode1 = doc["mode"].as<String>();
+    if (doc.containsKey("power"))
+      power1 = parsePower(doc["power"]);
+
+    if (doc.containsKey("temp")) {
+      temp1 = parseTemp(doc["temp"]);
+    }
+
+    if (doc.containsKey("mode")) {
+      mode1 = parseMode(doc["mode"]);
+    }
 
     applyAc(ac1, power1, temp1, mode1);
   }
 
-  // AC2
+  // ===== AC2 =====
   else if (t == topic_ac2_state) {
+
     if (doc.containsKey("power"))
-      power2 = (doc["power"] == "on");
+      power2 = parsePower(doc["power"]);
 
     applyAc(ac2, power2, temp2, mode2);
   }
 
   else if (t == topic_ac2_command) {
-    if (doc.containsKey("temp"))
-      temp2 = constrain(doc["temp"], 16, 30);
 
-    if (doc.containsKey("mode"))
-      mode2 = doc["mode"].as<String>();
+    if (doc.containsKey("power"))
+      power2 = parsePower(doc["power"]);
+
+    if (doc.containsKey("temp")) {
+      temp2 = parseTemp(doc["temp"]);
+    }
+
+    if (doc.containsKey("mode")) {
+      mode2 = parseMode(doc["mode"]);
+    }
 
     applyAc(ac2, power2, temp2, mode2);
   }
 }
 
-// ---------------- MQTT RECONNECT ----------------
+// ---------------- MQTT ----------------
 void reconnectMQTT() {
   Serial.print("Connecting MQTT...");
 
-  if (client.connect("ESP32_AC")) {
+  if (client.connect("ESP_AC")) {
     Serial.println("Connected");
 
     client.subscribe(topic_ac1_command);
     client.subscribe(topic_ac1_state);
     client.subscribe(topic_ac2_command);
     client.subscribe(topic_ac2_state);
-
   } else {
     Serial.print("Failed rc=");
     Serial.println(client.state());
