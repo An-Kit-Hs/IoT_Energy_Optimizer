@@ -157,11 +157,23 @@ void applyAc(IRPanasonicAc &ac, bool power, uint8_t temp, String mode) {
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   String msg;
+
+  // Build payload string FIRST
   for (int i = 0; i < length; i++)
     msg += (char)payload[i];
 
+  if (msg.startsWith("\"") && msg.endsWith("\"")) {
+    msg.remove(0, 1);
+    msg.remove(msg.length() - 1);
+    msg.replace("\\\"", "\"");
+  }
+
   StaticJsonDocument<200> doc;
-  if (deserializeJson(doc, msg)) return;
+  if (deserializeJson(doc, msg)) {
+    Serial.println("JSON parse failed");
+    Serial.println(msg);
+    return;
+  }
 
   String t = String(topic);
 
@@ -179,13 +191,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (doc.containsKey("power"))
       power1 = parsePower(doc["power"]);
 
-    if (doc.containsKey("temp")) {
+    if (doc.containsKey("temp"))
       temp1 = parseTemp(doc["temp"]);
-    }
 
-    if (doc.containsKey("mode")) {
+    if (doc.containsKey("mode"))
       mode1 = parseMode(doc["mode"]);
-    }
 
     applyAc(ac1, power1, temp1, mode1);
   }
@@ -204,13 +214,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (doc.containsKey("power"))
       power2 = parsePower(doc["power"]);
 
-    if (doc.containsKey("temp")) {
+    if (doc.containsKey("temp"))
       temp2 = parseTemp(doc["temp"]);
-    }
 
-    if (doc.containsKey("mode")) {
+    if (doc.containsKey("mode"))
       mode2 = parseMode(doc["mode"]);
-    }
 
     applyAc(ac2, power2, temp2, mode2);
   }
