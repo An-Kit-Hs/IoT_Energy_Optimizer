@@ -42,7 +42,6 @@ const int wifiCount = sizeof(wifiList) / sizeof(wifiList[0]);
 const char* mqtt_server = "broker.hivemq.com";
 
 const char* topic_ac = "control/ac/command";
-
 const char* topic_scd30_data = "sensor/data/scd30";
 const char* topic_sen55_data = "sensor/data/sen55";
 
@@ -52,6 +51,9 @@ PubSubClient client(espClient);
 // ---------------- Sensors ----------------
 SensirionI2cScd30 scd30;
 SensirionI2CSen5x sen55;
+
+bool scd30Available = false;
+bool sen55Available = false;
 
 // SCD30
 float co2, temp_scd, hum_scd;
@@ -70,7 +72,7 @@ String mode = "cool";
 // ---------------- Timing ----------------
 unsigned long lastReconnectAttempt = 0;
 unsigned long lastMeasurement = 0;
-const unsigned long measurementInterval = 120000; // FIXED 2 minutes
+const unsigned long measurementInterval = 120000; // 2 minutes
 
 // ---------------- Functions ----------------
 
@@ -103,7 +105,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message: ");
   Serial.println(message);
 
-  // -------- AC CONTROL --------
   if (String(topic) == topic_ac) {
 
     StaticJsonDocument<200> doc;
@@ -160,9 +161,7 @@ void reconnectMQTT() {
 
   if (client.connect("NodeMCU_AIR")) {
     Serial.println("Connected");
-
     client.subscribe(topic_ac);
-
   } else {
     Serial.print("Failed rc=");
     Serial.println(client.state());
@@ -176,7 +175,7 @@ void setup() {
 
   Wire.begin(D2, D1);
 
-  // AC
+  // AC setup
   ac.begin();
   ac.setFan(kPanasonicAcFanAuto);
   ac.setSwingVertical(true);
@@ -186,18 +185,32 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(mqttCallback);
 
-  // SCD30
-  scd30.begin(Wire, SCD30_I2C_ADDR_61);
-  scd30.stopPeriodicMeasurement();
-  scd30.softReset();
-  delay(2000);
-  scd30.startPeriodicMeasurement(0);
+  // -------- Detect SCD30 --------
+  if (scd30.begin(Wire, SCD30_I2C_ADDR_61)) {
+    scd30.stopPeriodicMeasurement();
+    scd30.softReset();
+    delay(2000);
+    scd30.startPeriodicMeasurement(0);
 
-  // SEN55
+    scd30Available = true;
+    Serial.println("SCD30 detected");
+  } else {
+    Serial.println("SCD30 NOT detected");
+  }
+
+  // -------- Detect SEN55 --------
   sen55.begin(Wire);
-  sen55.deviceReset();
-  delay(1000);
-  sen55.startMeasurement();
+  uint16_t error = sen55.deviceReset();
+
+  if (error == 0) {
+    delay(1000);
+    sen55.startMeasurement();
+
+    sen55Available = true;
+    Serial.println("SEN55 detected");
+  } else {
+    Serial.println("SEN55 NOT detected");
+  }
 
   Serial.println("System ready");
 }
@@ -218,7 +231,7 @@ void loop() {
     client.loop();
   }
 
-  // -------- FIXED 2 MIN MEASUREMENT --------
+  // -------- 2 MIN MEASUREMENT --------
   if (millis() - lastMeasurement >= measurementInterval) {
 
     lastMeasurement = millis();
@@ -226,7 +239,7 @@ void loop() {
     Serial.println("\n=== Measurement ===");
 
     // -------- SCD30 --------
-    if (scd30.dataReady()) {
+    if (scd30Available && scd30.dataReady()) {
       scd30.readMeasurementData(co2, temp_scd, hum_scd);
 
       Serial.print("CO2: "); Serial.println(co2);
@@ -235,46 +248,54 @@ void loop() {
     }
 
     // -------- SEN55 --------
-    uint16_t error = sen55.readMeasuredValues(
-      pm1, pm2_5, pm4, pm10,
-      temp_sen, hum_sen, voc, nox
-    );
+    if (sen55Available) {
+      uint16_t error = sen55.readMeasuredValues(
+        pm1, pm2_5, pm4, pm10,
+        temp_sen, hum_sen, voc, nox
+      );
 
-    if (!error) {
-      Serial.print("PM2.5: "); Serial.println(pm2_5);
-      Serial.print("VOC: "); Serial.println(voc);
-      Serial.print("NOx: "); Serial.println(nox);
+      if (!error) {
+        Serial.print("PM2.5: "); Serial.println(pm2_5);
+        Serial.print("VOC: "); Serial.println(voc);
+        Serial.print("NOx: "); Serial.println(nox);
+      }
     }
 
     // -------- Publish SCD30 --------
-    StaticJsonDocument<150> doc_scd30;
+    if (scd30Available) {
+      StaticJsonDocument<150> doc;
 
-    doc_scd30["co2"] = co2;
-    doc_scd30["temperature"] = temp_scd;
-    doc_scd30["humidity"] = hum_scd;
+      doc["co2"] = co2;
+      doc["temperature"] = temp_scd;
+      doc["humidity"] = hum_scd;
 
-    char buffer_scd30[150];
-    serializeJson(doc_scd30, buffer_scd30);
-    client.publish(topic_scd30_data, buffer_scd30);
+      char buffer[150];
+      serializeJson(doc, buffer);
+
+      client.publish(topic_scd30_data, buffer);
+    }
 
     // -------- Publish SEN55 --------
-    StaticJsonDocument<200> doc_sen55;
+    if (sen55Available) {
+      StaticJsonDocument<200> doc;
 
-    doc_sen55["pm1"] = pm1;
-    doc_sen55["pm2_5"] = pm2_5;
-    doc_sen55["pm4"] = pm4;
-    doc_sen55["pm10"] = pm10;
+      doc["pm1"] = pm1;
+      doc["pm2_5"] = pm2_5;
+      doc["pm4"] = pm4;
+      doc["pm10"] = pm10;
 
-    doc_sen55["temperature"] = temp_sen;
-    doc_sen55["humidity"] = hum_sen;
+      doc["temperature"] = temp_sen;
+      doc["humidity"] = hum_sen;
 
-    doc_sen55["voc"] = voc;
-    doc_sen55["nox"] = nox;
+      doc["voc"] = voc;
+      doc["nox"] = nox;
 
-    char buffer_sen55[200];
-    serializeJson(doc_sen55, buffer_sen55);
-    client.publish(topic_sen55_data, buffer_sen55);
+      char buffer[200];
+      serializeJson(doc, buffer);
 
-    Serial.println("Published SCD30 & SEN55\n");
+      client.publish(topic_sen55_data, buffer);
+    }
+
+    Serial.println("Published available sensor data\n");
   }
 }
