@@ -9,7 +9,9 @@
 #include <ir_Panasonic.h>
 #include <ArduinoJson.h>
 
-#define IR_LED_PIN D8
+// ---------------- IR ----------------
+#define IR_LED_PIN_AC1 4
+#define IR_LED_PIN_AC2 5
 
 /*
 ==================== WIRING ====================
@@ -25,7 +27,7 @@ IR LED (-) -> GND
 ===============================================
 */
 
-// ---------------- WiFi ----------------
+// ---------------- MULTI WIFI ----------------
 struct WiFiCred {
   const char* ssid;
   const char* password;
@@ -41,7 +43,12 @@ const int wifiCount = sizeof(wifiList) / sizeof(wifiList[0]);
 // ---------------- MQTT ----------------
 const char* mqtt_server = "broker.hivemq.com";
 
-const char* topic_ac = "control/ac/command";
+const char* topic_ac1_command = "control/ac1/command";
+const char* topic_ac1_state   = "control/ac1/state";
+
+const char* topic_ac2_command = "control/ac2/command";
+const char* topic_ac2_state   = "control/ac2/state";
+
 const char* topic_scd30_data = "sensor/data/scd30";
 const char* topic_sen55_data = "sensor/data/sen55";
 
@@ -55,76 +62,28 @@ SensirionI2CSen5x sen55;
 bool scd30Available = false;
 bool sen55Available = false;
 
-// SCD30
 float co2, temp_scd, hum_scd;
-
-// SEN55
 float pm1, pm2_5, pm4, pm10;
 float temp_sen, hum_sen, voc, nox;
 
-// ---------------- IR AC ----------------
-IRPanasonicAc ac(IR_LED_PIN);
+// ---------------- AC ----------------
+IRPanasonicAc ac1(IR_LED_PIN_AC1);
+IRPanasonicAc ac2(IR_LED_PIN_AC2);
 
-bool powerState = false;
-uint8_t temperatureAC = 24;
-String mode = "cool";
+bool power1 = false;
+uint8_t temp1 = 24;
+String mode1 = "cool";
+
+bool power2 = false;
+uint8_t temp2 = 24;
+String mode2 = "cool";
 
 // ---------------- Timing ----------------
 unsigned long lastReconnectAttempt = 0;
 unsigned long lastMeasurement = 0;
-const unsigned long measurementInterval = 120000; // 2 minutes
+const unsigned long interval = 120000;
 
-// ---------------- Functions ----------------
-
-void applyAcState() {
-  if (powerState) ac.on();
-  else ac.off();
-
-  ac.setTemp(temperatureAC);
-
-  if (mode == "cool") ac.setMode(kPanasonicAcCool);
-  else if (mode == "auto") ac.setMode(kPanasonicAcAuto);
-  else if (mode == "heat") ac.setMode(kPanasonicAcHeat);
-  else if (mode == "dry") ac.setMode(kPanasonicAcDry);
-  else if (mode == "fan") ac.setMode(kPanasonicAcFan);
-
-  ac.send();
-  Serial.println("AC command sent");
-}
-
-// ---------------- MQTT Callback ----------------
-
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-
-  String message;
-  for (int i = 0; i < length; i++)
-    message += (char)payload[i];
-
-  Serial.print("Topic: ");
-  Serial.println(topic);
-  Serial.print("Message: ");
-  Serial.println(message);
-
-  if (String(topic) == topic_ac) {
-
-    StaticJsonDocument<200> doc;
-    if (deserializeJson(doc, message)) return;
-
-    if (doc.containsKey("power"))
-      powerState = (doc["power"] == "on");
-
-    if (doc.containsKey("temp"))
-      temperatureAC = constrain(doc["temp"], 16, 30);
-
-    if (doc.containsKey("mode"))
-      mode = doc["mode"].as<String>();
-
-    applyAcState();
-  }
-}
-
-// ---------------- WiFi ----------------
-
+// ---------------- WIFI CONNECT ----------------
 void connectWiFi() {
   Serial.println("Connecting WiFi...");
 
@@ -154,69 +113,128 @@ void connectWiFi() {
   Serial.println("WiFi failed!");
 }
 
-// ---------------- MQTT ----------------
+// ---------------- AC APPLY ----------------
+void applyAc(IRPanasonicAc &ac, bool power, uint8_t temp, String mode) {
+  if (power) ac.on();
+  else ac.off();
 
+  ac.setTemp(temp);
+
+  if (mode == "cool") ac.setMode(kPanasonicAcCool);
+  else if (mode == "auto") ac.setMode(kPanasonicAcAuto);
+  else if (mode == "heat") ac.setMode(kPanasonicAcHeat);
+  else if (mode == "dry") ac.setMode(kPanasonicAcDry);
+  else if (mode == "fan") ac.setMode(kPanasonicAcFan);
+
+  ac.send();
+}
+
+// ---------------- MQTT CALLBACK ----------------
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+
+  String msg;
+  for (int i = 0; i < length; i++)
+    msg += (char)payload[i];
+
+  StaticJsonDocument<200> doc;
+  if (deserializeJson(doc, msg)) return;
+
+  String t = String(topic);
+
+  // AC1
+  if (t == topic_ac1_state) {
+    if (doc.containsKey("power"))
+      power1 = (doc["power"] == "on");
+
+    applyAc(ac1, power1, temp1, mode1);
+  }
+
+  else if (t == topic_ac1_command) {
+    if (doc.containsKey("temp"))
+      temp1 = constrain(doc["temp"], 16, 30);
+
+    if (doc.containsKey("mode"))
+      mode1 = doc["mode"].as<String>();
+
+    applyAc(ac1, power1, temp1, mode1);
+  }
+
+  // AC2
+  else if (t == topic_ac2_state) {
+    if (doc.containsKey("power"))
+      power2 = (doc["power"] == "on");
+
+    applyAc(ac2, power2, temp2, mode2);
+  }
+
+  else if (t == topic_ac2_command) {
+    if (doc.containsKey("temp"))
+      temp2 = constrain(doc["temp"], 16, 30);
+
+    if (doc.containsKey("mode"))
+      mode2 = doc["mode"].as<String>();
+
+    applyAc(ac2, power2, temp2, mode2);
+  }
+}
+
+// ---------------- MQTT RECONNECT ----------------
 void reconnectMQTT() {
   Serial.print("Connecting MQTT...");
 
-  if (client.connect("NodeMCU_AIR")) {
+  if (client.connect("ESP32_AC")) {
     Serial.println("Connected");
-    client.subscribe(topic_ac);
+
+    client.subscribe(topic_ac1_command);
+    client.subscribe(topic_ac1_state);
+    client.subscribe(topic_ac2_command);
+    client.subscribe(topic_ac2_state);
+
   } else {
     Serial.print("Failed rc=");
     Serial.println(client.state());
   }
 }
 
-// ---------------- Setup ----------------
-
+// ---------------- SETUP ----------------
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  Wire.begin();
 
-  Wire.begin(D2, D1);
-
-  // AC setup
-  ac.begin();
-  ac.setFan(kPanasonicAcFanAuto);
-  ac.setSwingVertical(true);
-
-  // WiFi + MQTT
   connectWiFi();
+
   client.setServer(mqtt_server, 1883);
   client.setCallback(mqttCallback);
 
-  // -------- Detect SCD30 --------
-  if (scd30.begin(Wire, SCD30_I2C_ADDR_61)) {
-    scd30.stopPeriodicMeasurement();
+  ac1.begin();
+  ac2.begin();
+
+  ac1.setFan(kPanasonicAcFanAuto);
+  ac2.setFan(kPanasonicAcFanAuto);
+
+  // SCD30
+  scd30.begin(Wire, SCD30_I2C_ADDR_61);
+  uint16_t err = scd30.stopPeriodicMeasurement();
+
+  if (err == 0) {
     scd30.softReset();
     delay(2000);
     scd30.startPeriodicMeasurement(0);
-
     scd30Available = true;
-    Serial.println("SCD30 detected");
-  } else {
-    Serial.println("SCD30 NOT detected");
   }
 
-  // -------- Detect SEN55 --------
+  // SEN55
   sen55.begin(Wire);
-  uint16_t error = sen55.deviceReset();
+  err = sen55.deviceReset();
 
-  if (error == 0) {
+  if (err == 0) {
     delay(1000);
     sen55.startMeasurement();
-
     sen55Available = true;
-    Serial.println("SEN55 detected");
-  } else {
-    Serial.println("SEN55 NOT detected");
   }
-
-  Serial.println("System ready");
 }
 
-// ---------------- Loop ----------------
-
+// ---------------- LOOP ----------------
 void loop() {
 
   if (WiFi.status() != WL_CONNECTED)
@@ -231,23 +249,31 @@ void loop() {
     client.loop();
   }
 
-  // -------- 2 MIN MEASUREMENT --------
-  if (millis() - lastMeasurement >= measurementInterval) {
-
+  if (millis() - lastMeasurement > interval) {
     lastMeasurement = millis();
 
-    Serial.println("\n=== Measurement ===");
+    // SCD30
+    if (scd30Available) {
+      uint16_t ready = 0;
+      int16_t error = scd30.getDataReady(ready);
 
-    // -------- SCD30 --------
-    if (scd30Available && scd30.dataReady()) {
-      scd30.readMeasurementData(co2, temp_scd, hum_scd);
+      if (!error && ready == 1) {
+        error = scd30.readMeasurementData(co2, temp_scd, hum_scd);
 
-      Serial.print("CO2: "); Serial.println(co2);
-      Serial.print("Temp(SCD): "); Serial.println(temp_scd);
-      Serial.print("Hum(SCD): "); Serial.println(hum_scd);
+        if (!error) {
+          StaticJsonDocument<150> doc;
+          doc["co2"] = co2;
+          doc["temperature"] = temp_scd;
+          doc["humidity"] = hum_scd;
+
+          char buffer[150];
+          serializeJson(doc, buffer);
+          client.publish(topic_scd30_data, buffer);
+        }
+      }
     }
 
-    // -------- SEN55 --------
+    // SEN55
     if (sen55Available) {
       uint16_t error = sen55.readMeasuredValues(
         pm1, pm2_5, pm4, pm10,
@@ -255,47 +281,15 @@ void loop() {
       );
 
       if (!error) {
-        Serial.print("PM2.5: "); Serial.println(pm2_5);
-        Serial.print("VOC: "); Serial.println(voc);
-        Serial.print("NOx: "); Serial.println(nox);
+        StaticJsonDocument<200> doc;
+        doc["pm2_5"] = pm2_5;
+        doc["voc"] = voc;
+        doc["nox"] = nox;
+
+        char buffer[200];
+        serializeJson(doc, buffer);
+        client.publish(topic_sen55_data, buffer);
       }
     }
-
-    // -------- Publish SCD30 --------
-    if (scd30Available) {
-      StaticJsonDocument<150> doc;
-
-      doc["co2"] = co2;
-      doc["temperature"] = temp_scd;
-      doc["humidity"] = hum_scd;
-
-      char buffer[150];
-      serializeJson(doc, buffer);
-
-      client.publish(topic_scd30_data, buffer);
-    }
-
-    // -------- Publish SEN55 --------
-    if (sen55Available) {
-      StaticJsonDocument<200> doc;
-
-      doc["pm1"] = pm1;
-      doc["pm2_5"] = pm2_5;
-      doc["pm4"] = pm4;
-      doc["pm10"] = pm10;
-
-      doc["temperature"] = temp_sen;
-      doc["humidity"] = hum_sen;
-
-      doc["voc"] = voc;
-      doc["nox"] = nox;
-
-      char buffer[200];
-      serializeJson(doc, buffer);
-
-      client.publish(topic_sen55_data, buffer);
-    }
-
-    Serial.println("Published available sensor data\n");
   }
 }

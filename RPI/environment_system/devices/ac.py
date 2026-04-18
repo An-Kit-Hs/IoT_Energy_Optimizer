@@ -7,7 +7,7 @@ from utils import CompressorProtection
 class ACDevice(BaseDevice):
 
     def __init__(self, mqtt, name):
-        super().__init__(mqtt, f"control/{name}/power")
+        super().__init__(mqtt, f"control/{name}/state")
         self.command_topic = f"control/{name}/command"
 
         self.protection = CompressorProtection()
