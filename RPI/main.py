@@ -94,14 +94,6 @@ def run_controller():
     
 def control_topic(device):
     return f"control/{device}/state"
-    
-def reset_retained_states():
-    log("[SYSTEM] Starting system, clearing old junk...")
-
-    for device in config.DEVICE_PINS:
-        topic = control_topic(device)
-        mqtt.publish(topic, {"power": "OFF"}, retain=True)
-        print(f"[MQTT] Reset {topic} -> OFF (retained)")
 
 
 # ------------------ HANDLERS ------------------
@@ -146,7 +138,6 @@ def handle_occupancy(topic, message):
 
 mqtt.connect()
 time.sleep(1)  # allow connection to settle
-reset_retained_states()
 
 mqtt.subscribe(config.CONTROLS_TOPIC, callback)
 mqtt.subscribe(config.SEN55_TOPIC, handle_sensor)

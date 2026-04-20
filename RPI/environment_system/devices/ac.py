@@ -30,7 +30,7 @@ class ACDevice(BaseDevice):
         self.mode = mode
         self.temp = temp
 
-        self.publish({"power": "ON"})
+        self.publish({"power": "on"})
         self.state = "ON"
         self.protection.mark_on()
 
@@ -49,7 +49,7 @@ class ACDevice(BaseDevice):
         if not self.protection.can_turn_off():
             return
 
-        self.publish({"power": "OFF"})
+        self.publish({"power": "off"})
 
         self.state = "OFF"
         self.protection.mark_off()

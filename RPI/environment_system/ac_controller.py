@@ -19,8 +19,8 @@ class ACControllerFSM:
         self.exhaust_block_until = 0
 
         # thresholds
-        self.ON_THRESHOLD = 26
-        self.OFF_THRESHOLD = 24
+        self.ON_THRESHOLD = 27
+        self.OFF_THRESHOLD = 24.5
 
         # timing
         self.MIN_ON_TIME = 30
@@ -28,16 +28,27 @@ class ACControllerFSM:
 
     def _compute_temp(self, feels_like):
         base = 24
-        k = 0.5
-        temp = base - k * (feels_like - base)
-        return round(max(18, min(26, temp)))
+
+        if feels_like <= 26:
+            return 24
+        elif feels_like <= 28:
+            return 22
+        elif feels_like <= 30:
+            return 20
+        elif feels_like <= 32:
+            return 18
+        else:
+            return 22
 
     def _select_mode(self, feels_like, humidity):
-        if humidity and humidity > 70:
+        if humidity and humidity > 75:
             return "dry"
+        if humidity and humidity < 65:
+            return "cool"
         if feels_like and feels_like < 24:
             return "fan"
-        return "cool"
+
+        return self.mode or "cool"
 
     def _can_switch(self, new_state):
         elapsed = time.time() - self.last_change

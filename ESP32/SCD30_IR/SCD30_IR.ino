@@ -80,53 +80,80 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   DBG2("Topic: ", topic);
   DBG2("Payload: ", msg);
 
+  if (msg.startsWith("\"") && msg.endsWith("\"")) {
+    msg.remove(0, 1);
+    msg.remove(msg.length() - 1);
+    msg.replace("\\\"", "\"");
+  }
+
   StaticJsonDocument<200> doc;
   if (deserializeJson(doc, msg)) {
     DBG("JSON parse failed");
     return;
   }
 
-  bool power = doc["power"] | false;
-  int temp = doc["temp"] | 24;
-  String mode = doc["mode"] | "cool";
-  mode.toLowerCase();
+  bool hasPower = doc.containsKey("power");
+  bool hasTemp  = doc.containsKey("temp");
+  bool hasMode  = doc.containsKey("mode");
 
   String t = String(topic);
 
-  // -------- AC1 --------
+  // ================= AC1 =================
   if (t == topic_ac1_command || t == topic_ac1_state) {
 
     DBG("Applying AC1");
 
-    if (power) ac1.on();
-    else ac1.off();
+    if (hasPower) {
+      bool power = doc["power"];
+      if (power) ac1.on();
+      else ac1.off();
+    }
 
-    ac1.setTemp(temp);
+    if (hasTemp) {
+      int temp = doc["temp"];
+      ac1.setTemp(temp);
+    }
 
-    if (mode == "cool") ac1.setMode(kPanasonicAcCool);
-    else if (mode == "heat") ac1.setMode(kPanasonicAcHeat);
-    else if (mode == "auto") ac1.setMode(kPanasonicAcAuto);
-    else if (mode == "dry") ac1.setMode(kPanasonicAcDry);
-    else if (mode == "fan") ac1.setMode(kPanasonicAcFan);
+    if (hasMode) {
+      String mode = doc["mode"];
+      mode.toLowerCase();
+
+      if (mode == "cool") ac1.setMode(kPanasonicAcCool);
+      else if (mode == "heat") ac1.setMode(kPanasonicAcHeat);
+      else if (mode == "auto") ac1.setMode(kPanasonicAcAuto);
+      else if (mode == "dry") ac1.setMode(kPanasonicAcDry);
+      else if (mode == "fan") ac1.setMode(kPanasonicAcFan);
+    }
 
     ac1.send();
   }
 
-  // -------- AC2 --------
+  // ================= AC2 =================
   else if (t == topic_ac2_command || t == topic_ac2_state) {
 
     DBG("Applying AC2");
 
-    if (power) ac2.on();
-    else ac2.off();
+    if (hasPower) {
+      bool power = doc["power"];
+      if (power) ac2.on();
+      else ac2.off();
+    }
 
-    ac2.setTemp(temp);
+    if (hasTemp) {
+      int temp = doc["temp"];
+      ac2.setTemp(temp);
+    }
 
-    if (mode == "cool") ac2.setMode(kPanasonicAcCool);
-    else if (mode == "heat") ac2.setMode(kPanasonicAcHeat);
-    else if (mode == "auto") ac2.setMode(kPanasonicAcAuto);
-    else if (mode == "dry") ac2.setMode(kPanasonicAcDry);
-    else if (mode == "fan") ac2.setMode(kPanasonicAcFan);
+    if (hasMode) {
+      String mode = doc["mode"];
+      mode.toLowerCase();
+
+      if (mode == "cool") ac2.setMode(kPanasonicAcCool);
+      else if (mode == "heat") ac2.setMode(kPanasonicAcHeat);
+      else if (mode == "auto") ac2.setMode(kPanasonicAcAuto);
+      else if (mode == "dry") ac2.setMode(kPanasonicAcDry);
+      else if (mode == "fan") ac2.setMode(kPanasonicAcFan);
+    }
 
     ac2.send();
   }
