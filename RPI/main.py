@@ -104,7 +104,7 @@ def callback(topic, message):
     parts = topic.split("/")
     device = parts[1] if len(parts) > 1 else None
 
-    print(f"[CONTROL] {device} -> {state}")
+    print(f"[CONTROL][MANUAL COMMAND] {device} -> {state}")
 
     if state is not None and device:
         controller.handle_command(device, state)
