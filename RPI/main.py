@@ -58,8 +58,6 @@ occupancy = OccupancyModule()
 sensor = SensorModule()
 
 controller = EnvironmentController(devices, occupancy)
-
-gpio = GPIOService()
 bridge = MQTTGPIOBridge(gpio)
 
 people = 0
