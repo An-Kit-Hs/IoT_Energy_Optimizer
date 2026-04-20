@@ -12,7 +12,6 @@ class LightDevice(BaseDevice):
             return
 
         self.gpio.set_device(self.name, True)
-        self.publish({"power": "on"})
 
         self.state = "ON"
         print(f"[LIGHT] {self.name} ON (GPIO)")
@@ -22,7 +21,6 @@ class LightDevice(BaseDevice):
             return
 
         self.gpio.set_device(self.name, False)
-        self.publish({"power": "off"})
 
         self.state = "OFF"
         print(f"[LIGHT] {self.name} OFF (GPIO)")
