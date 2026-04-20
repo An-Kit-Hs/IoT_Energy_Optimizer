@@ -38,15 +38,17 @@ class ACControllerFSM:
         elif feels_like <= 32:
             return 18
         else:
-            return 22
+            return 17
 
     def _select_mode(self, feels_like, humidity):
-        if humidity and humidity > 75:
-            return "dry"
-        if humidity and humidity < 65:
-            return "cool"
-        if feels_like and feels_like < 24:
+        if feels_like is not None and feels_like < 24:
             return "fan"
+
+        if humidity is not None:
+            if humidity > 75:
+                return "dry"
+            elif humidity < 65:
+                return "cool"
 
         return self.mode or "cool"
 
