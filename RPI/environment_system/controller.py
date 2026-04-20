@@ -1,103 +1,167 @@
+import time
+
 from sensors import SensorModule
 from utils import ComfortCalculator
 from air_quality import AirQualityModule
-from .ac_controller import ACController
-from .exhaust_controller import ExhaustController
+
+from .ac_controller import ACControllerFSM
+from .exhaust_controller import ExhaustControllerFSM
+
 
 class EnvironmentController:
 
     def __init__(self, devices, occupancy_module):
         self.devices = devices
         self.occupancy = occupancy_module
+
         self.sensor = SensorModule()
         self.air = AirQualityModule()
         self.comfort = ComfortCalculator()
-        
-        self.ac_ctrl = ACController(devices)
-        self.ex_ctrl = ExhaustController(devices)
-        
-    def safe_fmt(self, value, fmt=".1f"):
-        return format(value, fmt) if isinstance(value, (int, float)) else "N/A"
-    
-    def handle_command(self, device, state):
-        """
-        External command entry point (MQTT, UI, etc.)
-        """
 
-        if device.startswith("light"):
-            if state:
-                self.devices.turn_on_lights()
-            else:
-                self.devices.turn_off_lights()
+        self.ac_ctrl = ACControllerFSM(devices)
+        self.ex_ctrl = ExhaustControllerFSM(devices)
 
-        elif device == "exhaust":
-            # override exhaust controller
-            self.ex_ctrl.set_external_state(state)
+        # -------- MANUAL OVERRIDE --------
+        self.manual_override = {}  # device -> timestamp
+        self.override_duration = 600  # seconds (10 min)
 
-        elif device.startswith("ac"):
-            # override AC controller
-            self.ac_ctrl.set_external_state(state)
+    # ================= OVERRIDE HELPERS =================
+    def set_override(self, device):
+        self.manual_override[device] = time.time()
+        print(f"[OVERRIDE] {device} enabled")
 
-        else:
-            print(f"[COMMAND] Unknown device: {device}")
+    def is_overridden(self, device):
+        ts = self.manual_override.get(device)
 
+        if not ts:
+            return False
+
+        elapsed = time.time() - ts
+
+        if elapsed > self.override_duration:
+            del self.manual_override[device]
+            print(f"[OVERRIDE] {device} expired")
+            return False
+
+        remaining = int(self.override_duration - elapsed)
+        print(f"[OVERRIDE] {device} active ({remaining}s left)")
+        return True
+
+    # ================= MAIN PROCESS =================
     def process(self, data, people):
         try:
-            # -------- Occupancy --------
             occ = self.occupancy.update(people)
-            
-            # -------- Lighting control --------
-            if occ.get("occupied"):
-                self.devices.turn_on_lights()
-            else:
-                self.devices.turn_off_lights()
 
-            # -------- Sensor smoothing --------
+            # -------- LIGHTS --------
+            if not self.is_overridden("light1"):
+                if occ.get("occupied"):
+                    self.devices.turn_on_lights()
+                else:
+                    self.devices.turn_off_lights()
+            else:
+                print("[OVERRIDE] Lights manual control active")
+
+            # -------- SENSOR PROCESS --------
             sensor = self.sensor.update(data)
             data = sensor["data"]
 
-            # -------- Air Quality --------
+            # -------- AIR QUALITY --------
             aq = self.air.update(data)
-            score = aq.get("score")
-            trend = aq.get("trend_rising")
 
-            # -------- Exhaust Control --------
-            self.ex_ctrl.update(score, trend)
-
-            # -------- Comfort --------
+            # -------- COMFORT --------
             feels_like = self.comfort.feels_like(
                 data.temperature,
                 data.humidity
             )
 
-            # -------- AC Control --------
-            self.ac_ctrl.update(
-                occupied=occ.get("occupied"),
-                feels_like=feels_like,
-                humidity=data.humidity,
-                exhaust_on=self.ex_ctrl.is_on()
-            )
+            # -------- EXHAUST --------
+            if not self.is_overridden("exhaust"):
+                self.ex_ctrl.update(aq.get("score"), aq.get("trend_rising"))
+            else:
+                print("[OVERRIDE] Exhaust manual control active")
 
-            # -------- Status Logging --------
-            ac_state = self.ac_ctrl.get_state()
+            # -------- AC --------
+            if not self.is_overridden("ac1") and not self.is_overridden("ac2"):
+                self.ac_ctrl.update(
+                    occupied=occ.get("occupied"),
+                    feels_like=feels_like,
+                    humidity=data.humidity,
+                    exhaust_on=self.ex_ctrl.is_on()
+                )
+            else:
+                print("[OVERRIDE] AC manual control active")
 
-            ac_state = self.ac_ctrl.get_state()
-
-            ac_str = "OFF"
-            if ac_state["on"]:
-                ac_str = f"ON({ac_state['mode']},{ac_state['temp']}°C)"
+            # -------- STATUS LOG --------
+            ac = self.ac_ctrl.get_state()
 
             print(
                 f"[STATUS] "
                 f"Occ:{occ['state']}({people}) | "
-                f"AQI:{self.safe_fmt(score)} | "
-                f"T:{self.safe_fmt(data.temperature)}°C "
-                f"H:{self.safe_fmt(data.humidity)}% "
-                f"F:{self.safe_fmt(feels_like)}°C | "
-                f"AC:{ac_str} | "
-                f"EX:{'ON' if self.ex_ctrl.is_on() else 'OFF'} | "
+                f"AQI:{aq.get('score')} | "
+                f"T:{data.temperature} H:{data.humidity} | "
+                f"AC:{ac['state']}({ac['mode']},{ac['temp']}) | "
+                f"EX:{self.ex_ctrl.state} | "
                 f"L:{'ON' if self.devices.is_lights_on() else 'OFF'}"
             )
 
         except Exception as e:
             print(f"[Controller] Error: {e}")
+
+    # ================= MANUAL COMMAND HANDLER =================
+    def handle_command(self, device, state):
+        try:
+            if state is None:
+                print(f"[CONTROL] Ignored invalid state for {device}")
+                return
+
+            # Enable override
+            self.set_override(device)
+
+            # Normalize input
+            if isinstance(state, str):
+                state = {"power": state.lower()}
+
+            power = state.get("power")
+            mode = state.get("mode")
+            temp = state.get("temp")
+
+            # -------- AC --------
+            if device.startswith("ac"):
+                ac = self.devices.get_ac(device)
+
+                if power == "on":
+                    if temp is None:
+                        temp = 24
+                    if mode is None:
+                        mode = "cool"
+
+                    ac.turn_on(temp=temp, mode=mode)
+
+                elif power == "off":
+                    ac.turn_off()
+
+                if temp is not None:
+                    ac.set_temp(temp)
+
+                if mode is not None:
+                    ac.set_mode(mode)
+
+            # -------- LIGHT --------
+            elif device.startswith("light"):
+                if power == "on":
+                    self.devices.turn_on_lights()
+                elif power == "off":
+                    self.devices.turn_off_lights()
+
+            # -------- EXHAUST --------
+            elif device.startswith("exhaust"):
+                if power == "on":
+                    self.devices.turn_on_exhaust()
+                elif power == "off":
+                    self.devices.turn_off_exhaust()
+
+            else:
+                print(f"[CONTROL] Unknown device: {device}")
+
+        except Exception as e:
+            print(f"[CONTROL ERROR] {device}: {e}")

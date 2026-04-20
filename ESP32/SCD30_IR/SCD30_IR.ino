@@ -68,8 +68,69 @@ unsigned long lastReconnectAttempt = 0;
 unsigned long lastWiFiAttempt = 0;
 unsigned long lastMeasurement = 0;
 
-// shorter interval for debugging
 const unsigned long interval = 5000;
+
+// ---------------- MQTT CALLBACK ----------------
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+
+  String msg;
+  for (int i = 0; i < length; i++) msg += (char)payload[i];
+
+  DBG("----- MQTT MESSAGE -----");
+  DBG2("Topic: ", topic);
+  DBG2("Payload: ", msg);
+
+  StaticJsonDocument<200> doc;
+  if (deserializeJson(doc, msg)) {
+    DBG("JSON parse failed");
+    return;
+  }
+
+  bool power = doc["power"] | false;
+  int temp = doc["temp"] | 24;
+  String mode = doc["mode"] | "cool";
+  mode.toLowerCase();
+
+  String t = String(topic);
+
+  // -------- AC1 --------
+  if (t == topic_ac1_command || t == topic_ac1_state) {
+
+    DBG("Applying AC1");
+
+    if (power) ac1.on();
+    else ac1.off();
+
+    ac1.setTemp(temp);
+
+    if (mode == "cool") ac1.setMode(kPanasonicAcCool);
+    else if (mode == "heat") ac1.setMode(kPanasonicAcHeat);
+    else if (mode == "auto") ac1.setMode(kPanasonicAcAuto);
+    else if (mode == "dry") ac1.setMode(kPanasonicAcDry);
+    else if (mode == "fan") ac1.setMode(kPanasonicAcFan);
+
+    ac1.send();
+  }
+
+  // -------- AC2 --------
+  else if (t == topic_ac2_command || t == topic_ac2_state) {
+
+    DBG("Applying AC2");
+
+    if (power) ac2.on();
+    else ac2.off();
+
+    ac2.setTemp(temp);
+
+    if (mode == "cool") ac2.setMode(kPanasonicAcCool);
+    else if (mode == "heat") ac2.setMode(kPanasonicAcHeat);
+    else if (mode == "auto") ac2.setMode(kPanasonicAcAuto);
+    else if (mode == "dry") ac2.setMode(kPanasonicAcDry);
+    else if (mode == "fan") ac2.setMode(kPanasonicAcFan);
+
+    ac2.send();
+  }
+}
 
 // ---------------- WIFI ----------------
 void connectWiFi() {
@@ -144,6 +205,7 @@ void setup() {
   connectWiFi();
 
   client.setServer(mqtt_server, 1883);
+  client.setCallback(mqttCallback);
 
   ac1.begin();
   ac2.begin();
