@@ -1,11 +1,13 @@
 import time
 import config
 
+
 class ExhaustState:
     OFF = "OFF"
     PREVENTIVE = "PREVENTIVE"
     EMERGENCY = "EMERGENCY"
     COOLDOWN = "COOLDOWN"
+
 
 class ExhaustControllerFSM:
 
@@ -14,15 +16,12 @@ class ExhaustControllerFSM:
 
         self.state = ExhaustState.OFF
         self.last_change = time.time()
-
         self.cooldown_start = None
 
-        # thresholds
         self.ON_THRESHOLD = config.AQI_PREVENTIVE_THRESHOLD
         self.OFF_THRESHOLD = config.AQI_PREVENTIVE_THRESHOLD - 10
         self.EMERGENCY = config.AQI_EMERGENCY_THRESHOLD
 
-        # timing
         self.MIN_ON_TIME = 10
         self.MIN_OFF_TIME = 10
         self.COOLDOWN_TIME = 30
@@ -49,7 +48,6 @@ class ExhaustControllerFSM:
         self.last_change = time.time()
 
     def update(self, score, trend_rising):
-
         desired = self.state
 
         if isinstance(score, (int, float)):
@@ -83,4 +81,4 @@ class ExhaustControllerFSM:
             self._apply(desired)
 
     def is_on(self):
-        return self.state != ExhaustState.OFF
+        return self.state in (ExhaustState.PREVENTIVE, ExhaustState.EMERGENCY)

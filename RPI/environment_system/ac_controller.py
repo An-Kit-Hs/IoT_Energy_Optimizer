@@ -1,10 +1,12 @@
 import time
 
+
 class ACState:
     OFF = "OFF"
     COOLING = "COOLING"
     FAN = "FAN"
     DRY = "DRY"
+
 
 class ACControllerFSM:
 
@@ -27,8 +29,6 @@ class ACControllerFSM:
         self.MIN_OFF_TIME = 20
 
     def _compute_temp(self, feels_like):
-        base = 24
-
         if feels_like <= 26:
             return 24
         elif feels_like <= 28:
@@ -76,15 +76,15 @@ class ACControllerFSM:
         self.last_change = time.time()
 
     def update(self, occupied, feels_like, humidity, exhaust_on):
-
         now = time.time()
+
         desired = self.state
         temp = self.temp
         mode = self.mode
 
-        # -------- Exhaust block --------
+        # -------- Exhaust override --------
         if exhaust_on:
-            self.exhaust_block_until = now + 60
+            self.exhaust_block_until = max(self.exhaust_block_until, now + 60)
             desired = ACState.OFF
 
         elif now < self.exhaust_block_until:
@@ -130,10 +130,7 @@ class ACControllerFSM:
     def set_external_state(self, state: bool, temp=None, mode=None):
         if state:
             use_temp = temp if temp is not None else self.temp or 24
-            use_mode = mode if mode is not None else self.mode or "cool"
-
-            # Normalize mode
-            use_mode = use_mode.lower()
+            use_mode = (mode if mode is not None else self.mode or "cool").lower()
 
             if use_mode == "fan":
                 new_state = ACState.FAN
@@ -143,7 +140,6 @@ class ACControllerFSM:
                 new_state = ACState.COOLING
 
             self._apply(new_state, use_temp, use_mode)
-
         else:
             self._apply(ACState.OFF, None, None)
 
