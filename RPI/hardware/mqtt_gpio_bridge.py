@@ -9,27 +9,56 @@ class MQTTGPIOBridge:
             return
 
         state = self.parse_payload(message)
+
+        print(f"[MQTT] {device} -> {state}")
+
         if state is None:
             print(f"[MQTT] Invalid payload: {message}")
             return
 
         try:
-            self.gpio.set_device(device, state)
+            # GPIO only cares about power
+            if isinstance(state, dict):
+                power = state.get("power")
+                if power is None:
+                    print(f"[MQTT] No power field for {device}")
+                    return
+
+                value = power in ["on", "1", "true"]
+            else:
+                value = bool(state)
+
+            self.gpio.set_device(device, value)
+
         except ValueError:
             print(f"[MQTT] Unknown device: {device}")
 
     def parse_payload(self, message):
         try:
+            # If already dict → normalize
             if isinstance(message, dict):
-                val = message.get("power", "").lower()
+                data = message.copy()
+
             else:
-                val = str(message).lower()
-        except:
+                import json
+
+                # Try JSON decode first
+                try:
+                    data = json.loads(message)
+                except Exception:
+                    # fallback: simple string
+                    val = str(message).lower()
+                    if val in ["on", "1", "true"]:
+                        return {"power": "on"}
+                    elif val in ["off", "0", "false"]:
+                        return {"power": "off"}
+                    return None
+
+            # Normalize power field if exists
+            if "power" in data:
+                data["power"] = str(data["power"]).lower()
+
+            return data
+
+        except Exception:
             return None
-
-        if val in ["on", "1", "true"]:
-            return True
-        elif val in ["off", "0", "false"]:
-            return False
-
-        return None
