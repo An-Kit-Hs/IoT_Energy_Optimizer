@@ -38,7 +38,7 @@ result = air.update(sensor_data)
 
 ## Components
 
-### AQIScorer
+### IAQScorer
 
 Calculates overall air quality score based on:
 

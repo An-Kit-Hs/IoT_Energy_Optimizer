@@ -1,48 +1,42 @@
-class AQIScorer:
+class IAQScorer:
 
-    def _safe(self, value):
+    def _safe(self, v):
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            return float(v)
+        except:
             return None
+
+    def _scale(self, x, good, bad):
+        # smooth 0 → 100 scaling
+        if x <= good:
+            return 0
+        if x >= bad:
+            return 100
+        return (x - good) / (bad - good) * 100
 
     def score_pm25(self, pm):
         pm = self._safe(pm)
         if pm is None:
             return None
-
-        if pm < 12:
-            return 0
-        if pm < 35:
-            return 25
-        if pm < 55:
-            return 50
-        return 100
+        return self._scale(pm, 5, 50)   # indoor thresholds
 
     def score_voc(self, voc):
         voc = self._safe(voc)
         if voc is None:
             return None
-        return min(voc / 5, 100)
+        return self._scale(voc, 50, 300)   # typical VOC index range
 
     def score_nox(self, nox):
         nox = self._safe(nox)
         if nox is None:
             return None
-        return min(nox / 5, 100)
+        return self._scale(nox, 20, 200)
 
     def score_co2(self, co2):
         co2 = self._safe(co2)
         if co2 is None:
             return None
-
-        if co2 < 600:
-            return 0
-        if co2 < 1000:
-            return 25
-        if co2 < 1500:
-            return 50
-        return 100
+        return self._scale(co2, 500, 2000)
 
     def overall(self, data):
         scores = {
@@ -53,19 +47,15 @@ class AQIScorer:
         }
 
         weights = {
-            "pm": 0.4,
+            "pm": 0.35,
             "voc": 0.25,
             "nox": 0.15,
-            "co2": 0.2,
+            "co2": 0.25,
         }
 
-        # keep only valid scores
         valid = {k: v for k, v in scores.items() if v is not None}
-
         if not valid:
-            return None  # nothing usable
+            return None
 
-        # normalize weights (important if some values missing)
-        total_weight = sum(weights[k] for k in valid)
-
-        return sum(valid[k] * weights[k] for k in valid) / total_weight
+        total_w = sum(weights[k] for k in valid)
+        return sum(valid[k] * weights[k] for k in valid) / total_w

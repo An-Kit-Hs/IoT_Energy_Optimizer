@@ -1,4 +1,4 @@
-from .aqi import AQIScorer
+from .aqi import IAQScorer
 from .trend import AirTrendDetector
 from .ventilation import VentilationPredictor
 
@@ -6,7 +6,7 @@ from .ventilation import VentilationPredictor
 class AirQualityModule:
 
     def __init__(self):
-        self.aqi = AQIScorer()
+        self.aqi = IAQScorer()
         self.trend = AirTrendDetector()
         self.ventilation = VentilationPredictor()
 
