@@ -38,7 +38,7 @@ class ACControllerFSM:
         elif feels_like <= 32:
             return 18
         else:
-            return 17
+            return 18
 
     def _select_mode(self, feels_like, humidity):
         if feels_like is not None and feels_like < 24:
