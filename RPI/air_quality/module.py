@@ -1,4 +1,4 @@
-from .aqi import IAQScorer
+from .iaq import IAQScorer
 from .trend import AirTrendDetector
 from .ventilation import VentilationPredictor
 
