@@ -46,12 +46,13 @@ signal.signal(signal.SIGTERM, handle_signal)
 # ------------------ INIT ------------------
 
 mqtt = MQTTClient(config.MQTT_BROKER)
+gpio = GPIOService()
 
 devices = DeviceManager(mqtt)
 devices.add_ac("ac1")
 devices.add_ac("ac2")
-devices.add_light("light1")
-devices.add_exhaust("exhaust")
+devices.add_light("light1", gpio)
+devices.add_exhaust("exhaust", gpio)
 
 occupancy = OccupancyModule()
 sensor = SensorModule()

@@ -104,9 +104,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     DBG("Applying AC1");
 
     if (hasPower) {
-      bool power = doc["power"];
-      if (power) ac1.on();
-      else ac1.off();
+      if (doc["power"].is<bool>()) {
+        bool power = doc["power"];
+        if (power) ac1.on();
+        else ac1.off();
+      }
+      else if (doc["power"].is<const char*>()) {
+        String power = doc["power"].as<String>();
+        power.toLowerCase();
+
+        if (power == "on") ac1.on();
+        else if (power == "off") ac1.off();
+      }
     }
 
     if (hasTemp) {
@@ -134,9 +143,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     DBG("Applying AC2");
 
     if (hasPower) {
-      bool power = doc["power"];
-      if (power) ac2.on();
-      else ac2.off();
+      if (doc["power"].is<bool>()) {
+        bool power = doc["power"];
+        if (power) ac2.on();
+        else ac2.off();
+      }
+      else if (doc["power"].is<const char*>()) {
+        String power = doc["power"].as<String>();
+        power.toLowerCase();
+
+        if (power == "on") ac2.on();
+        else if (power == "off") ac2.off();
+      }
     }
 
     if (hasTemp) {

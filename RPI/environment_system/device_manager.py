@@ -16,11 +16,11 @@ class DeviceManager:
     def add_ac(self, name):
         self.acs[name] = ACDevice(self.mqtt, name)
 
-    def add_exhaust(self, name):
-        self.exhausts[name] = ExhaustDevice(self.mqtt, name)
+    def add_exhaust(self, name, gpio):
+        self.exhausts[name] = ExhaustDevice(self.mqtt, name, gpio)
 
-    def add_light(self, name):
-        self.lights[name] = LightDevice(self.mqtt, name)
+    def add_light(self, name, gpio):
+        self.lights[name] = LightDevice(self.mqtt, name, gpio)
 
     # ---------- AC control ----------
     def get_ac(self, name):
