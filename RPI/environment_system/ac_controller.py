@@ -127,9 +127,23 @@ class ACControllerFSM:
                 self.temp = temp
                 self.mode = mode
 
-    def set_external_state(self, state: bool):
+    def set_external_state(self, state: bool, temp=None, mode=None):
         if state:
-            self._apply(ACState.COOLING, self.temp or 24, self.mode or "cool")
+            use_temp = temp if temp is not None else self.temp or 24
+            use_mode = mode if mode is not None else self.mode or "cool"
+
+            # Normalize mode
+            use_mode = use_mode.lower()
+
+            if use_mode == "fan":
+                new_state = ACState.FAN
+            elif use_mode == "dry":
+                new_state = ACState.DRY
+            else:
+                new_state = ACState.COOLING
+
+            self._apply(new_state, use_temp, use_mode)
+
         else:
             self._apply(ACState.OFF, None, None)
 

@@ -151,17 +151,19 @@ class EnvironmentController:
                     print(f"[CONTROL] Unknown AC: {device}")
                     return
 
+                current = self.ac_ctrl.get_state()
+
                 if power == "on":
-                    ac.turn_on(temp=temp or 24, mode=mode or "cool")
+                    use_temp = temp if temp is not None else current.get("temp") or 24
+                    use_mode = mode if mode is not None else current.get("mode") or "cool"
+
+                    ac.turn_on(temp=use_temp, mode=use_mode)
+                    self.ac_ctrl.set_external_state(True, use_temp, use_mode)
 
                 elif power == "off":
                     ac.turn_off()
-
-                if temp is not None:
-                    ac.set_temp(temp)
-
-                if mode is not None:
-                    ac.set_mode(mode)
+                    self.ac_ctrl.set_external_state(False)
+                    
 
             # -------- LIGHT --------
             elif device.startswith("light"):
