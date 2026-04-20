@@ -22,32 +22,37 @@ class EnvironmentController:
         self.ex_ctrl = ExhaustControllerFSM(devices)
 
         # -------- MANUAL OVERRIDE --------
-        self.manual_override = {}  # device -> timestamp
-        self.override_duration = 600  # seconds (10 min)
+        self.manual_override = {}
+        self.override_logged = {}
+        self.override_duration = 60  # 10 min
 
-    # ================= OVERRIDE HELPERS =================
+    # ================= OVERRIDE =================
     def set_override(self, device):
         self.manual_override[device] = time.time()
+        self.override_logged[device] = False
         print(f"[OVERRIDE] {device} enabled")
 
     def is_overridden(self, device):
         ts = self.manual_override.get(device)
-
         if not ts:
             return False
 
         elapsed = time.time() - ts
 
-        if elapsed > self.override_duration:
+        if elapsed >= self.override_duration:
             del self.manual_override[device]
+            self.override_logged.pop(device, None)
             print(f"[OVERRIDE] {device} expired")
             return False
 
-        remaining = int(self.override_duration - elapsed)
-        print(f"[OVERRIDE] {device} active ({remaining}s left)")
+        # log only once
+        if not self.override_logged.get(device):
+            print(f"[OVERRIDE] {device} manual control active")
+            self.override_logged[device] = True
+
         return True
 
-    # ================= MAIN PROCESS =================
+    # ================= MAIN LOOP =================
     def process(self, data, people):
         try:
             occ = self.occupancy.update(people)
@@ -58,14 +63,12 @@ class EnvironmentController:
                     self.devices.turn_on_lights()
                 else:
                     self.devices.turn_off_lights()
-            else:
-                print("[OVERRIDE] Lights manual control active")
 
-            # -------- SENSOR PROCESS --------
+            # -------- SENSOR --------
             sensor = self.sensor.update(data)
             data = sensor["data"]
 
-            # -------- AIR QUALITY --------
+            # -------- AIR --------
             aq = self.air.update(data)
 
             # -------- COMFORT --------
@@ -76,22 +79,25 @@ class EnvironmentController:
 
             # -------- EXHAUST --------
             if not self.is_overridden("exhaust"):
-                self.ex_ctrl.update(aq.get("score"), aq.get("trend_rising"))
-            else:
-                print("[OVERRIDE] Exhaust manual control active")
+                self.ex_ctrl.update(
+                    aq.get("score"),
+                    aq.get("trend_rising")
+                )
 
             # -------- AC --------
-            if not self.is_overridden("ac1") and not self.is_overridden("ac2"):
+            ac1_override = self.is_overridden("ac1")
+            ac2_override = self.is_overridden("ac2")
+
+            # only skip if BOTH overridden
+            if not (ac1_override and ac2_override):
                 self.ac_ctrl.update(
                     occupied=occ.get("occupied"),
                     feels_like=feels_like,
                     humidity=data.humidity,
                     exhaust_on=self.ex_ctrl.is_on()
                 )
-            else:
-                print("[OVERRIDE] AC manual control active")
 
-            # -------- STATUS LOG --------
+            # -------- STATUS --------
             ac = self.ac_ctrl.get_state()
 
             print(
@@ -107,17 +113,24 @@ class EnvironmentController:
         except Exception as e:
             print(f"[Controller] Error: {e}")
 
-    # ================= MANUAL COMMAND HANDLER =================
+    # ================= COMMAND HANDLER =================
     def handle_command(self, device, state):
         try:
             if state is None:
                 print(f"[CONTROL] Ignored invalid state for {device}")
                 return
 
-            # Enable override
-            self.set_override(device)
+            # -------- SOURCE CHECK --------
+            if isinstance(state, dict):
+                source = state.get("source", "auto")
+            else:
+                source = "manual"
 
-            # Normalize input
+            # ONLY manual triggers override
+            if source == "manual":
+                self.set_override(device)
+
+            # Normalize
             if isinstance(state, str):
                 state = {"power": state.lower()}
 
@@ -125,17 +138,19 @@ class EnvironmentController:
             mode = state.get("mode")
             temp = state.get("temp")
 
+            if mode:
+                mode = str(mode).lower()
+
             # -------- AC --------
             if device.startswith("ac"):
                 ac = self.devices.get_ac(device)
 
-                if power == "on":
-                    if temp is None:
-                        temp = 24
-                    if mode is None:
-                        mode = "cool"
+                if not ac:
+                    print(f"[CONTROL] Unknown AC: {device}")
+                    return
 
-                    ac.turn_on(temp=temp, mode=mode)
+                if power == "on":
+                    ac.turn_on(temp=temp or 24, mode=mode or "cool")
 
                 elif power == "off":
                     ac.turn_off()

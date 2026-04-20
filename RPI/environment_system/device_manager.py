@@ -23,6 +23,9 @@ class DeviceManager:
         self.lights[name] = LightDevice(self.mqtt, name)
 
     # ---------- AC control ----------
+    def get_ac(self, name):
+        return self.acs.get(name)
+
     def turn_on_ac(self, temp=24, mode="cool"):
         for ac in self.acs.values():
             ac.turn_on(temp, mode)
