@@ -9,12 +9,12 @@ class ExhaustDevice(BaseDevice):
         if self.state == "ON":
             return
 
-        self.publish({"power": "ON"})
+        self.publish({"power": "on"})
         self.state = "ON"
 
     def turn_off(self):
         if self.state == "OFF":
             return
 
-        self.publish({"power": "OFF"})
+        self.publish({"power": "off"})
         self.state = "OFF"

@@ -9,11 +9,18 @@
 #include <ir_Panasonic.h>
 #include <ArduinoJson.h>
 
+// ---------------- DEBUG ----------------
+#define DEBUG_PIN D0
+bool DEBUG_MODE = false;
+
+#define DBG(x) if (DEBUG_MODE) Serial.println(x)
+#define DBG2(x,y) if (DEBUG_MODE) { Serial.print(x); Serial.println(y); }
+
 // ---------------- IR ----------------
 #define IR_LED_PIN_AC1 D8
 #define IR_LED_PIN_AC2 D7
 
-// ---------------- MULTI WIFI ----------------
+// ---------------- WIFI ----------------
 struct WiFiCred {
   const char* ssid;
   const char* password;
@@ -41,7 +48,7 @@ const char* topic_sen55_data = "sensor/data/sen55";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// ---------------- Sensors ----------------
+// ---------------- SENSORS ----------------
 SensirionI2cScd30 scd30;
 SensirionI2CSen5x sen55;
 
@@ -56,219 +63,108 @@ float temp_sen, hum_sen, voc, nox;
 IRPanasonicAc ac1(IR_LED_PIN_AC1);
 IRPanasonicAc ac2(IR_LED_PIN_AC2);
 
-bool power1 = false;
-uint8_t temp1 = 24;
-String mode1 = "cool";
-
-bool power2 = false;
-uint8_t temp2 = 24;
-String mode2 = "cool";
-
-// ---------------- Timing ----------------
+// ---------------- TIMING ----------------
 unsigned long lastReconnectAttempt = 0;
+unsigned long lastWiFiAttempt = 0;
 unsigned long lastMeasurement = 0;
-const unsigned long interval = 120000;
 
-// ---------------- PARSERS ----------------
-bool parsePower(JsonVariant val) {
-  if (val.is<bool>()) return val.as<bool>();
-
-  if (val.is<const char*>()) {
-    String s = val.as<String>();
-    s.toLowerCase();
-    return (s == "on" || s == "1" || s == "true");
-  }
-
-  if (val.is<int>()) return val.as<int>() == 1;
-
-  return false;
-}
-
-uint8_t parseTemp(JsonVariant val) {
-  int t = 24;
-
-  if (val.is<const char*>())
-    t = atoi(val.as<const char*>());
-  else if (val.is<int>())
-    t = val.as<int>();
-
-  return constrain(t, 16, 30);
-}
-
-String parseMode(JsonVariant val) {
-  if (!val.is<const char*>()) return "cool";
-
-  String m = val.as<String>();
-  m.toLowerCase();
-
-  if (m == "cool" || m == "auto" || m == "heat" || m == "dry" || m == "fan")
-    return m;
-
-  return "cool";
-}
+// shorter interval for debugging
+const unsigned long interval = 5000;
 
 // ---------------- WIFI ----------------
 void connectWiFi() {
-  Serial.println("Connecting WiFi...");
+  DBG("Connecting WiFi...");
 
   for (int i = 0; i < wifiCount; i++) {
 
-    Serial.print("Trying: ");
-    Serial.println(wifiList[i].ssid);
+    DBG2("Trying: ", wifiList[i].ssid);
 
     WiFi.begin(wifiList[i].ssid, wifiList[i].password);
 
     int retry = 0;
     while (WiFi.status() != WL_CONNECTED && retry < 20) {
       delay(500);
-      Serial.print(".");
+      if (DEBUG_MODE) Serial.print(".");
       retry++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected!");
-      Serial.println(WiFi.localIP());
+      DBG("\nWiFi Connected!");
+      DBG2("IP: ", WiFi.localIP());
+      DBG2("RSSI: ", WiFi.RSSI());
       return;
     }
 
+    DBG("\nFailed, trying next...");
     WiFi.disconnect();
   }
 
-  Serial.println("WiFi failed!");
-}
-
-// ---------------- AC APPLY ----------------
-void applyAc(IRPanasonicAc &ac, bool power, uint8_t temp, String mode) {
-  if (power) ac.on();
-  else ac.off();
-
-  ac.setTemp(temp);
-
-  if (mode == "cool") ac.setMode(kPanasonicAcCool);
-  else if (mode == "auto") ac.setMode(kPanasonicAcAuto);
-  else if (mode == "heat") ac.setMode(kPanasonicAcHeat);
-  else if (mode == "dry") ac.setMode(kPanasonicAcDry);
-  else if (mode == "fan") ac.setMode(kPanasonicAcFan);
-
-  ac.send();
-}
-
-// ---------------- MQTT CALLBACK ----------------
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-
-  String msg;
-
-  // Build payload string FIRST
-  for (int i = 0; i < length; i++)
-    msg += (char)payload[i];
-
-  if (msg.startsWith("\"") && msg.endsWith("\"")) {
-    msg.remove(0, 1);
-    msg.remove(msg.length() - 1);
-    msg.replace("\\\"", "\"");
-  }
-
-  StaticJsonDocument<200> doc;
-  if (deserializeJson(doc, msg)) {
-    Serial.println("JSON parse failed");
-    Serial.println(msg);
-    return;
-  }
-
-  String t = String(topic);
-
-  // ===== AC1 =====
-  if (t == topic_ac1_state) {
-
-    if (doc.containsKey("power"))
-      power1 = parsePower(doc["power"]);
-
-    applyAc(ac1, power1, temp1, mode1);
-  }
-
-  else if (t == topic_ac1_command) {
-
-    if (doc.containsKey("power"))
-      power1 = parsePower(doc["power"]);
-
-    if (doc.containsKey("temp"))
-      temp1 = parseTemp(doc["temp"]);
-
-    if (doc.containsKey("mode"))
-      mode1 = parseMode(doc["mode"]);
-
-    applyAc(ac1, power1, temp1, mode1);
-  }
-
-  // ===== AC2 =====
-  else if (t == topic_ac2_state) {
-
-    if (doc.containsKey("power"))
-      power2 = parsePower(doc["power"]);
-
-    applyAc(ac2, power2, temp2, mode2);
-  }
-
-  else if (t == topic_ac2_command) {
-
-    if (doc.containsKey("power"))
-      power2 = parsePower(doc["power"]);
-
-    if (doc.containsKey("temp"))
-      temp2 = parseTemp(doc["temp"]);
-
-    if (doc.containsKey("mode"))
-      mode2 = parseMode(doc["mode"]);
-
-    applyAc(ac2, power2, temp2, mode2);
-  }
+  DBG("WiFi failed!");
 }
 
 // ---------------- MQTT ----------------
 void reconnectMQTT() {
-  Serial.print("Connecting MQTT...");
 
-  if (client.connect("ESP_AC")) {
-    Serial.println("Connected");
+  DBG("Connecting MQTT...");
+
+  String clientId = "ESP_AC_" + String(ESP.getChipId());
+
+  if (client.connect(clientId.c_str())) {
+    DBG("MQTT Connected");
 
     client.subscribe(topic_ac1_command);
     client.subscribe(topic_ac1_state);
     client.subscribe(topic_ac2_command);
     client.subscribe(topic_ac2_state);
+
+    DBG("Subscribed to topics");
   } else {
-    Serial.print("Failed rc=");
-    Serial.println(client.state());
+    DBG2("MQTT Failed rc=", client.state());
   }
 }
 
 // ---------------- SETUP ----------------
 void setup() {
-  Serial.begin(115200);
+
+  pinMode(DEBUG_PIN, INPUT_PULLUP);
+  delay(50);
+
+  if (digitalRead(DEBUG_PIN) == LOW) {
+    DEBUG_MODE = true;
+  }
+
+  if (DEBUG_MODE) {
+    Serial.begin(115200);
+    delay(200);
+    Serial.println("\n=== DEBUG MODE ENABLED ===");
+  }
+
   Wire.begin();
 
   connectWiFi();
 
   client.setServer(mqtt_server, 1883);
-  client.setCallback(mqttCallback);
 
   ac1.begin();
   ac2.begin();
 
-  ac1.setFan(kPanasonicAcFanAuto);
-  ac2.setFan(kPanasonicAcFanAuto);
-
-  // SCD30
+  // ================= SCD30 INIT =================
   scd30.begin(Wire, SCD30_I2C_ADDR_61);
-  uint16_t err = scd30.stopPeriodicMeasurement();
+
+  scd30.softReset();
+  delay(2000);
+
+  uint16_t err = scd30.startPeriodicMeasurement(0);
 
   if (err == 0) {
-    scd30.softReset();
-    delay(2000);
-    scd30.startPeriodicMeasurement(0);
+    delay(3000); 
     scd30Available = true;
+    DBG("SCD30 initialized OK");
+  } else {
+    DBG2("SCD30 init error: ", err);
   }
 
-  // SEN55
+  // ================= SEN55 INIT =================
   sen55.begin(Wire);
   err = sen55.deviceReset();
 
@@ -282,8 +178,21 @@ void setup() {
 // ---------------- LOOP ----------------
 void loop() {
 
-  if (WiFi.status() != WL_CONNECTED)
-    connectWiFi();
+  static unsigned long lastLog = 0;
+
+  if (millis() - lastLog > 10000) {
+    lastLog = millis();
+    DBG("---- SYSTEM STATUS ----");
+    DBG2("WiFi: ", WiFi.status() == WL_CONNECTED ? "OK" : "DOWN");
+    DBG2("MQTT: ", client.connected() ? "OK" : "DOWN");
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (millis() - lastWiFiAttempt > 10000) {
+      lastWiFiAttempt = millis();
+      connectWiFi();
+    }
+  }
 
   if (!client.connected()) {
     if (millis() - lastReconnectAttempt > 5000) {
@@ -294,18 +203,33 @@ void loop() {
     client.loop();
   }
 
+  // ================= SENSOR =================
   if (millis() - lastMeasurement > interval) {
     lastMeasurement = millis();
 
-    // SCD30
+    // ---------- SCD30 ----------
     if (scd30Available) {
+
       uint16_t ready = 0;
       int16_t error = scd30.getDataReady(ready);
 
-      if (!error && ready == 1) {
+      DBG("Checking SCD30...");
+      DBG2("Ready: ", ready);
+      DBG2("Error: ", error);
+
+      if (error) {
+        DBG2("SCD30 getDataReady error: ", error);
+      }
+      else if (ready != 1) {
+        DBG("SCD30 not ready yet");
+      }
+      else {
         error = scd30.readMeasurementData(co2, temp_scd, hum_scd);
 
         if (!error) {
+          DBG("SCD30 OK");
+          DBG2("CO2: ", co2);
+
           StaticJsonDocument<150> doc;
           doc["co2"] = co2;
           doc["temperature"] = temp_scd;
@@ -314,11 +238,13 @@ void loop() {
           char buffer[150];
           serializeJson(doc, buffer);
           client.publish(topic_scd30_data, buffer);
+        } else {
+          DBG2("SCD30 read error: ", error);
         }
       }
     }
 
-    // SEN55
+    // ---------- SEN55 ----------
     if (sen55Available) {
       uint16_t error = sen55.readMeasuredValues(
         pm1, pm2_5, pm4, pm10,
@@ -326,6 +252,9 @@ void loop() {
       );
 
       if (!error) {
+        DBG("SEN55 OK");
+        DBG2("PM2.5: ", pm2_5);
+
         StaticJsonDocument<200> doc;
         doc["pm1"] = pm1;
         doc["pm2_5"] = pm2_5;
@@ -337,6 +266,8 @@ void loop() {
         char buffer[200];
         serializeJson(doc, buffer);
         client.publish(topic_sen55_data, buffer);
+      } else {
+        DBG2("SEN55 Error: ", error);
       }
     }
   }

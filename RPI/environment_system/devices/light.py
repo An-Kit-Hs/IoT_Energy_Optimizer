@@ -11,7 +11,7 @@ class LightDevice(BaseDevice):
             return
 
         self.publish({
-            "power": "ON"
+            "power": "on"
         })
 
         self.state = "ON"
@@ -20,5 +20,5 @@ class LightDevice(BaseDevice):
         if self.state == "OFF":
             return
 
-        self.publish({"power": "OFF"})
+        self.publish({"power": "off"})
         self.state = "OFF"

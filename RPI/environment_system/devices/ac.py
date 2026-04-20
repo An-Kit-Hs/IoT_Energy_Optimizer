@@ -16,7 +16,7 @@ class ACDevice(BaseDevice):
 
     def _publish_command(self, payload):
         # use BaseDevice publish
-        self.publish(json.dumps(payload), topic=self.command_topic)
+        self.publish(payload, topic=self.command_topic)
 
     def turn_on(self, temp, mode="cool"):
         if self.state == "ON":
@@ -30,7 +30,7 @@ class ACDevice(BaseDevice):
         self.mode = mode
         self.temp = temp
 
-        self.publish(json.dumps({"power": "ON"}))
+        self.publish({"power": "ON"})
         self.state = "ON"
         self.protection.mark_on()
 
@@ -49,7 +49,7 @@ class ACDevice(BaseDevice):
         if not self.protection.can_turn_off():
             return
 
-        self.publish(json.dumps({"power": "OFF"}))
+        self.publish({"power": "OFF"})
 
         self.state = "OFF"
         self.protection.mark_off()
